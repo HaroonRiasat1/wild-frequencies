@@ -22,6 +22,8 @@ class Engine {
   delay!: Tone.FeedbackDelay;
   private reverbSend!: Tone.Gain;
   private delaySend!: Tone.Gain;
+  private masterFilter!: Tone.Filter;
+  private recordDest: MediaStreamAudioDestinationNode | null = null;
 
   ch!: Record<InstrumentId, Tone.Channel>;
 
@@ -90,7 +92,8 @@ class Engine {
     this.volume = new Tone.Volume(-4).toDestination();
     const limiter = new Tone.Limiter(-1).connect(this.volume);
     const comp = new Tone.Compressor({ threshold: -16, ratio: 3, attack: 0.01, release: 0.2 }).connect(limiter);
-    this.master = new Tone.Gain(0.9).connect(comp);
+    this.masterFilter = new Tone.Filter({ type: 'lowpass', frequency: 20000, rolloff: -24, Q: 2 }).connect(comp);
+    this.master = new Tone.Gain(0.9).connect(this.masterFilter);
     this.fft = new Tone.FFT({ size: 512, smoothing: 0.6 });
     this.meter = new Tone.Meter({ smoothing: 0.7 });
     limiter.connect(this.fft);
@@ -422,6 +425,61 @@ class Engine {
   pyro() {
     if (!this.ready) return;
     this.boom.triggerAttackRelease('A0', '2n', Tone.now() + 0.01, 1);
+  }
+
+  // ------------------------------------------------------------------ live remix
+
+  /** DJ filter sweep: the whole mix dives underwater and comes back up. */
+  filterSweep() {
+    if (!this.ready) return;
+    const f = this.masterFilter.frequency;
+    const now = Tone.now();
+    f.cancelScheduledValues(now);
+    f.setValueAtTime(20000, now);
+    f.exponentialRampToValueAtTime(350, now + 1.8);
+    f.exponentialRampToValueAtTime(20000, now + 3.6);
+  }
+
+  /** Echo throw: crank the tape-delay feedback for a couple of seconds. */
+  echoThrow() {
+    if (!this.ready) return;
+    const now = Tone.now();
+    this.delay.feedback.cancelScheduledValues(now);
+    this.delay.feedback.setValueAtTime(0.75, now);
+    this.delay.feedback.linearRampToValueAtTime(0.38, now + 2.5);
+    this.delaySend.gain.cancelScheduledValues(now);
+    this.delaySend.gain.setValueAtTime(2.5, now);
+    this.delaySend.gain.linearRampToValueAtTime(1, now + 2.5);
+  }
+
+  /** Drum fill on demand, landing on the grid. */
+  fill() {
+    if (!this.ready) return;
+    const t = this.quantized();
+    const s16 = 60 / conductor.state.bpm / 4;
+    const kinds: DrumKind[] = ['snare', 'snare', 'tomHi', 'tomHi', 'tomHi', 'tomLo', 'tomLo', 'tomLo'];
+    kinds.forEach((k, i) => this.drum(k, t + i * s16, 0.6 + i * 0.05));
+    this.drum('crash', t + 8 * s16, 1);
+    this.drum('kick', t + 8 * s16, 1);
+  }
+
+  /** "Drop it": a sub boom + crash right now. */
+  dropBoom() {
+    if (!this.ready) return;
+    const t = this.quantized();
+    this.boom.triggerAttackRelease('A0', '2n', t, 1);
+    this.drum('crash', t, 1);
+  }
+
+  /** A MediaStream of the master output, for recording clips. */
+  recordStream(): MediaStream | null {
+    if (!this.ready) return null;
+    if (!this.recordDest) {
+      const raw = Tone.getContext().rawContext as AudioContext;
+      this.recordDest = raw.createMediaStreamDestination();
+      Tone.connect(this.volume, this.recordDest);
+    }
+    return this.recordDest.stream;
   }
 
   /** A crowd clapping together on a beat (a smear of a few dozen hands). */

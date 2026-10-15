@@ -161,10 +161,12 @@ class SongPlayer {
     if (ev.vocal) {
       const v = ev.vocal;
       const durSec = v.dur * s16 * 0.95;
+      // duet mode: every second line is yours (the cat politely rests)
+      const yours = isYourLine(v.line);
       engine.cat.setPresetIfNeeded(v.voice);
-      engine.cat.sing(v.midi, durSec, time, v.syl, v.vel);
-      out.push(['vocal', { ...v, durSec }]);
-      out.push(['note', { who: 'cat', midi: v.midi, dur: v.dur, vel: v.vel }]);
+      if (!yours) engine.cat.sing(v.midi, durSec, time, v.syl, v.vel);
+      out.push(['vocal', { ...v, durSec, yours }]);
+      if (!yours) out.push(['note', { who: 'cat', midi: v.midi, dur: v.dur, vel: v.vel }]);
     }
     if (ev.backing) {
       const b = ev.backing;
@@ -183,6 +185,12 @@ class SongPlayer {
       }, time);
     }
   }
+}
+
+/** Duet mode with the mic on: odd-numbered lyric lines belong to you. */
+export function isYourLine(lineId: number): boolean {
+  const st = useShow.getState();
+  return st.duet && st.micActive && lineId % 2 === 1;
 }
 
 export const songPlayer = new SongPlayer();

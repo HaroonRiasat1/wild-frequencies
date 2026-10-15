@@ -25,9 +25,10 @@ working on songs).
 ## The show
 
 1. **Landing** – dark venue, strobe/motion warnings, "Doors open".
+1. **Opening act** – The Crumbs (two very nervous mice) play their one song. Someone heckles. Polite applause.
 2. **Mic check** – Trash Panda Pete (roadie raccoon): "one two, one two… *squeak*" (plus a little feedback).
 3. **Walk-on** – band members enter one by one with name cards. The diva enters last.
-4. **The set** – five original songs with banter in between:
+4. **The set** – six original songs with banter in between:
 
    | # | Song | BPM | Key | Showcase |
    |---|------|-----|-----|----------|
@@ -35,11 +36,12 @@ working on songs).
    | 2 | Velvet Claws | 108 | E dorian | sloth bass groove, fox knee-slide solo |
    | 3 | Eight Arms of Love | 124 | D minor | octopus drum solo (inking likely) |
    | 4 | Fog Machine Heart | 72 | F major | the ballad: phones & lighters up |
-   | 5 | Howl at the Disco | 122 | G minor | four-on-the-floor, wolf-howl chorus, goat drops |
+   | 5 | Hibernation Is for Quitters | 116 | B minor | anti-sleep rock, espresso-fuelled fox solo |
+   | 6 | Howl at the Disco | 122 | G minor | four-on-the-floor, wolf-howl chorus, goat drops |
    | E | Last Call at the Watering Hole | 100 | C major | encore singalong — **only if you earn it** |
 
 5. **Fake ending** – the band "leaves". Fill the hype meter to unlock the encore.
-6. **Outro** – bows, rolling credits, *Play again* / *Share your set*.
+6. **Outro** – bows, rolling credits with your score and badges, *Play again* / *Share your set* / **🎉 Go to the afterparty** (backstage: Gary finally tunes, Octavia signs eight autographs at once, Greg eats the setlist).
 
 All melodies, lyrics and progressions are original. Every song runs 1:40–2:05.
 
@@ -59,6 +61,14 @@ All melodies, lyrics and progressions are original. Every song runs 1:40–2:05.
 | **Wave** (W) | a Mexican wave rolls through the crowd (it also happens by itself on big choruses) |
 | **Ball** (J), then click it | beach balls bounce over the crowd; click to BONK them back up |
 | **Shirt** (G) | Greg fires the T-shirt cannon — sometimes *you* catch one and wear it |
+| Click **your capybara** during a song | stage dive: climb up, dance next to the band, dive and crowd-surf back |
+| **Shout** (Y) | type a request or a heckle — song names get queued, the cat answers everything |
+| **Merch** (B) or click the stand | spend acorns (earned by playing along) on shirts, cat ears, a crown, a foam paw… your capybara wears them |
+| **Lights** (X) | take over the light show: palettes, movement, lasers, fog bursts, confetti, pyro |
+| **Remix** (R) | filter sweep, echo throw, drum fill on demand, DROP IT, tempo ± (band songs) |
+| **Clip** (K) | records 10 s of the show (video + audio) in your browser, then gives you a link to save it |
+| **Sing → Duet** | with the mic on, every second lyric line is yours; the cat waits for you |
+| Phones | portrait works (camera follows the action), tap the stage to clap, buzz on the beat |
 | Click the moon 5× | the moon joins on tambourine |
 | ↑ ↑ ↓ ↓ ← → ← → B A | tiny sunglasses for everyone (including the crowd, the frog and you) |
 
@@ -66,6 +76,13 @@ Accessibility: **Reduce motion**, **Strobe** (off by default, warned on the
 landing page), captions always available (C), keyboard controls for
 everything, volume (+/−). Phones in landscape get a simplified stage with fewer
 particles and less fog.
+
+### Score & badges
+
+Everything you do earns points and 🌰 acorns: on-beat claps, catches, bonks,
+stage dives, shouting, remixing, filming. There are 19 badges ("Survived the
+Bear", "Lunar Percussion", "Human Metronome"…); the ⭐ chip in the top bar opens
+the list, and the best score on this device is remembered.
 
 ### Real-gig moments (they just happen)
 
@@ -79,6 +96,12 @@ particles and less fog.
   the pit; the hype goat fires shirts on drops.
 - Once per show Rusty breaks a string mid-verse; the roadie sprints on with a
   spare guitar.
+- Weather: it may rain for a song mid-set (free ponchos, puddles reflecting
+  the lights, splashes on the stage). During the ballad a cloud covers the
+  moon and the fog turns purple. Force it in Settings → Weather.
+- On your own headliner track the penguins sing harmonies on the detected
+  chords (`audio/keyDetect.ts`: chromagram → Krumhansl key profiles → one
+  triad per bar), and mic mode autotunes to the detected key.
 
 These all live in `scene/concert.ts` and react to the same conductor events,
 so they work on your headliner track too.

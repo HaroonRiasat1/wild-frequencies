@@ -8,12 +8,13 @@ import { songPlayer } from '../audio/songPlayer';
 import { analyzeTrack, type TrackMap } from '../audio/trackAnalysis';
 import { trackPlayer } from '../audio/trackPlayer';
 import { conductor } from '../conductor/conductor';
-import { BANTER, ENCORE, getCompiled, SETLIST } from '../songs';
+import { BANTER, ENCORE, getCompiled, OPENER, SETLIST } from '../songs';
 import type { Song } from '../songs/types';
 import { clearHeadliner, loadHeadliner, saveHeadliner } from '../state/headliner';
 import { useShow } from '../state/store';
 import { CAST, WALK_ON_ORDER } from './cast';
 import { peakHype, resetPeak } from './hype';
+import { unlock } from './score';
 
 const ABORT = Symbol('abort');
 let runId = 0;
@@ -30,7 +31,7 @@ function wait(seconds: number, id: number): Promise<void> {
 const CAT = CAST.cat.name;
 
 /** The cat "speaks" — a burst of meows while the subtitle shows the translation. */
-function catSays(text: string) {
+export function catSays(text: string) {
   S().say(CAT, text);
   conductor.emit('bubble', { who: 'cat', text: '♪ mrrow mrrp meow ♪', seconds: 2.4 });
   const words = Math.min(9, text.split(' ').length);
@@ -79,7 +80,7 @@ function playTrack(file: File, id: number, phase: 'playing' | 'upload'): Promise
       .then(({ buffer, map }) => {
         if (id !== runId) return reject(ABORT);
         const title = trackTitle(file);
-        S().set({ songId: 'headliner', phase, sectionKind: null, sectionLabel: '', lyric: null, trackBpm: map.bpm });
+        S().set({ songId: 'headliner', phase, sectionKind: null, sectionLabel: '', lyric: null, trackBpm: map.bpm, detectedKey: map.key.label });
         conductor.emit('ledText', { text: title.toUpperCase(), seconds: 4 });
         catSays('This one is a cover. We will mouth along with total conviction.');
         resetPeak();
@@ -115,9 +116,9 @@ function pickNext(): Song | 'headliner' | null {
   return next;
 }
 
-function playSong(song: Song, id: number): Promise<void> {
+function playSong(song: Song, id: number, phase?: 'openingAct'): Promise<void> {
   const s = S();
-  s.set({ songId: song.id, phase: song.encore ? 'encore' : 'playing', sectionKind: null, sectionLabel: '', lyric: null, subtitle: null });
+  s.set({ songId: song.id, phase: phase ?? (song.encore ? 'encore' : 'playing'), sectionKind: null, sectionLabel: '', lyric: null, subtitle: null });
   conductor.emit('ledText', { text: song.title.toUpperCase(), seconds: 4 });
   resetPeak();
   return new Promise((resolve, reject) => {
@@ -146,6 +147,29 @@ async function runShow(skipIntro: boolean) {
   const id = ++runId;
   try {
     if (!skipIntro) {
+      // ---- 0. the opening act (two nervous mice, one song)
+      S().set({ phase: 'openingAct' });
+      engine.murmur(true);
+      await wait(1.5, id);
+      S().say('The Crumbs', 'h-hello. we are The Crumbs. this is our song.');
+      await wait(2.5, id);
+      const heckle = Tone.getContext().setTimeout(() => {
+        if (id !== runId) return;
+        S().say('Someone in the back', 'PLAY THE MEOW ONE!!');
+        Tone.getContext().setTimeout(() => id === runId && S().say('Brie (The Crumbs)', '…we don\'t have a meow one.'), 2.2);
+      }, 9);
+      await playSong(OPENER, id, 'openingAct');
+      Tone.getContext().clearTimeout(heckle);
+      engine.applaud(2.2, 18);
+      for (const line of BANTER['opening-act']) {
+        const [who, text] = line.split(': ');
+        S().say(`${who} (The Crumbs)`, text);
+        await wait(3, id);
+      }
+      unlock('openingAct');
+      S().set({ subtitle: null });
+      await wait(1.5, id);
+
       // ---- 1. mic check
       S().set({ phase: 'micCheck' });
       engine.murmur(true);
@@ -177,10 +201,23 @@ async function runShow(skipIntro: boolean) {
       everyone(true);
     }
 
-    // ---- 3. the set
+    // ---- 3. the set (with the weather doing whatever it wants)
+    const w = S().weather;
+    let songNo = 0;
+    const rainSong = w === 'auto' && Math.random() < 0.7 ? 2 + Math.floor(Math.random() * 2) : -1;
     for (let next = pickNext(); next; next = pickNext()) {
+      const rain = w === 'rain' || songNo === rainSong;
+      if (rain && !S().raining) {
+        S().set({ raining: true });
+        S().say('Stage Manager (a badger)', 'Is that… rain? Ponchos are free at the merch stand. The show goes ON.');
+      }
       if (next === 'headliner' && headlinerFile) await playTrack(headlinerFile, id, 'playing');
       else if (next !== 'headliner') await playSong(next, id);
+      if (S().raining && w !== 'rain') {
+        S().set({ raining: false });
+        unlock('rain');
+      }
+      songNo++;
       S().set({ phase: 'banter' });
       await wait(1.5, id);
       if (peekNext()) await banter(next === 'headliner' ? 'headliner' : next.id, id);
@@ -282,6 +319,43 @@ export const director = {
     trackPlayer.skip();
   },
 
+  /** After the credits: hang out backstage with the band. */
+  async afterparty() {
+    const id = ++runId;
+    everyone(true);
+    S().set({ phase: 'afterparty', panel: null, subtitle: null, raining: false, lightOverride: null, songId: null, sectionKind: null, sectionLabel: '', lyric: null });
+    engine.murmur(true);
+    unlock('afterparty');
+    conductor.emit('ledText', { text: 'AFTERPARTY 🎉 (VIP ONLY)', seconds: 600 });
+    const chatter: [string, string][] = [
+      ['Gary', '…almost… in tune…'],
+      ['Octavia Eightfold', 'Who wants an autograph? I can do eight at once.'],
+      ['Sir Reginald Purrcival III', 'I was magnificent. Say it. Say I was magnificent.'],
+      ['Kevin (The Tuxedos)', 'I only fell over twice tonight. Personal best.'],
+      ['Greg', 'meh. (contentedly)'],
+      ['Professor Hootenanny', 'No, I will not take the sunglasses off. Not even backstage.'],
+      ['Rusty "Shred" Brushtail', 'Did anyone get the knee slide on camera? Asking for my knees.'],
+      ['Trash Panda Pete (roadie)', 'Who left half a sandwich in the kick drum. I am not complaining. I am eating it.'],
+      ['Gary', '…tuned. …what did I miss…'],
+    ];
+    try {
+      for (let i = 0; ; i++) {
+        const [who, text] = chatter[i % chatter.length];
+        S().say(who, text);
+        await wait(4.2, id);
+      }
+    } catch (e) {
+      if (e !== ABORT) throw e;
+    }
+  },
+
+  leaveAfterparty() {
+    runId++;
+    engine.murmur(false);
+    conductor.emit('ledText', { text: 'GOODNIGHT', seconds: 2 });
+    S().set({ phase: 'credits', subtitle: null });
+  },
+
   playAgain() {
     this.abort();
     detector.stop();
@@ -289,6 +363,7 @@ export const director = {
     S().set({
       phase: 'landing', played: [], setLog: [], requested: null, hype: 0, encoreUnlocked: false, songId: null,
       subtitle: null, lyric: null, nameCard: null, moonJoined: false, moonClicks: 0, lighters: 0, panel: null,
+      raining: false, stageDive: 'none', lightOverride: null, score: 0, achievements: [], toasts: [],
     });
     everyone(false);
     Tone.getContext().setTimeout(() => runShow(false), 0.4);

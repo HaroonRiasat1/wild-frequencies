@@ -65,6 +65,9 @@ export class Sky {
     }
   }
 
+  /** 0..1 cloud over the moon (rain, or the ballad getting emotional). */
+  cloud = 0;
+
   drawBack(g: G, f: Frame, moonFace: boolean, moonClicks: number) {
     if (!this.gradient) {
       this.gradient = g.createLinearGradient(0, -200, 0, 700);
@@ -120,6 +123,18 @@ export class Sky {
         circ(g, Math.cos(a) * 18, Math.sin(a) * 18, 4, '#e8e0c8');
       }
       g.restore();
+    }
+
+    // ---- clouds drifting over the moon
+    if (this.cloud > 0.01) {
+      const drift = Math.sin(f.t * 0.05) * 40;
+      for (const [dx, dy, r] of [[-70, 10, 60], [-10, -10, 75], [60, 15, 58], [120, 0, 50], [-130, 20, 45]]) {
+        circ(g, MOON.x + dx + drift, MOON.y + dy, r, `rgba(28,20,52,${0.92 * this.cloud})`);
+      }
+    }
+    if (this.cloud > 0.5) {
+      g.fillStyle = `rgba(10,8,25,${(this.cloud - 0.5) * 0.5})`;
+      g.fillRect(-400, -300, 2400, 820);
     }
 
     // ---- distant hills + forest silhouettes

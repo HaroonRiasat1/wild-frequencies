@@ -4,6 +4,7 @@
 import { conductor } from '../conductor/conductor';
 import { engine } from '../audio/engine';
 import { useShow } from '../state/store';
+import { unlock } from './score';
 
 let cooldown = 0;
 /** Precise value; the store only gets updates when it visibly changes. */
@@ -35,6 +36,7 @@ export function tickHype(dt: number) {
     engine.meeeh();
     if (!s.encoreUnlocked) {
       s.set({ encoreUnlocked: true });
+      unlock('encore');
       conductor.emit('ledText', { text: 'ENCORE UNLOCKED', seconds: 3 });
     }
     h = 0.8;

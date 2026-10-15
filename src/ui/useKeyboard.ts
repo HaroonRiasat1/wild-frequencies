@@ -5,6 +5,8 @@ import { cheerStart, cheerStop } from '../show/hype';
 import { conductor } from '../conductor/conductor';
 import type { CharacterId } from '../songs/types';
 import { useShow } from '../state/store';
+import { recordClip } from './clip';
+import { unlock } from '../show/score';
 
 const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
 const POKE: CharacterId[] = ['cat', 'fox', 'sloth', 'octopus', 'owl', 'penguins', 'goat'];
@@ -23,6 +25,7 @@ export function useKeyboard() {
       if (k === KONAMI.length) {
         k = 0;
         s.set({ sunglasses: !s.sunglasses });
+        unlock('konami');
         conductor.emit('ledText', { text: s.sunglasses ? 'SUNGLASSES: OFF' : '😎 DEAL WITH IT 😎', seconds: 3 });
         s.say('Professor Hootenanny', s.sunglasses ? 'Fine. Eyes are back.' : 'Finally. Everyone gets it now.');
         return;
@@ -46,6 +49,11 @@ export function useKeyboard() {
         case 'c': return s.set({ captions: !s.captions });
         case 'n': return director.skip();
         case 'h': return stageRef.current?.concert.clap();
+        case 'y': e.preventDefault(); return s.togglePanel('shout');
+        case 'x': return s.togglePanel('lights');
+        case 'b': return s.togglePanel('merch');
+        case 'r': return s.togglePanel('remix');
+        case 'k': return recordClip();
         case 'w': return stageRef.current?.concert.wave();
         case 'j': return stageRef.current?.concert.beachBall();
         case 'g': return stageRef.current?.concert.shirtCannon();

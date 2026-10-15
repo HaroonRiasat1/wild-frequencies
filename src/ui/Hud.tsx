@@ -6,6 +6,8 @@ import { director } from '../show/director';
 import { cheerStart, cheerStop } from '../show/hype';
 import { ALL_SONGS } from '../songs';
 import { useShow, type Panel } from '../state/store';
+import { clipExtension, clipSupported, recordClip } from './clip';
+import { LightsPanel, MerchPanel, RemixPanel, ScorePanel, ShoutPanel } from './ExtraPanels';
 import { MicPanel, Mixer, SettingsPanel, Setlist, UploadPanel } from './Panels';
 
 const HYPE_LABELS = ['mild interest', 'polite clapping', 'woo!', 'WOOOO!!', 'absolute scenes', 'ENCORE ENERGY'];
@@ -14,7 +16,7 @@ export function Hud() {
   const s = useShow();
   const found = ALL_SONGS.find((x) => x.id === s.songId);
   const song = found ?? (s.songId === 'headliner' && s.trackBpm
-    ? { title: s.headliner?.name ?? s.uploadName?.replace(/\.[^.]+$/, '') ?? 'Your track', bpm: Math.round(s.trackBpm), key: 'your track', ballad: false }
+    ? { title: s.headliner?.name ?? s.uploadName?.replace(/\.[^.]+$/, '') ?? 'Your track', bpm: Math.round(s.trackBpm), key: s.detectedKey ? `${s.detectedKey} (detected)` : 'your track', ballad: false }
     : undefined);
   const balladNow = !!song?.ballad;
 
@@ -31,13 +33,30 @@ export function Hud() {
           ) : (
             <span className="meta">{s.analysing ? '🎛️ Soundchecking your track (finding every beat)…' : phaseLabel(s.phase, s.uploadName)}</span>
           )}
+          <button className="score-chip" onClick={() => s.togglePanel('score')} title="Score & badges">
+            ⭐ {s.score.toLocaleString()} · 🌰 {s.acorns}
+          </button>
         </div>
         <nav className="tools" aria-label="Show controls">
           <ToolButton panel="setlist" icon="📝" label="Setlist" k="S" />
           <ToolButton panel="mixer" icon="🎚️" label="Mixer" k="M" />
           <ToolButton panel="mic" icon="🎤" label="Sing" k="V" />
           <ToolButton panel="upload" icon="💿" label="Your track" k="U" />
+          <ToolButton panel="shout" icon="📣" label="Shout" k="Y" />
+          <ToolButton panel="lights" icon="💡" label="Lights" k="X" />
+          <ToolButton panel="remix" icon="🎛️" label="Remix" k="R" />
+          <ToolButton panel="merch" icon="🛍️" label="Merch" k="B" />
+          {clipSupported() && (
+            <button className={`tool ${s.clip.recording ? 'active rec' : ''}`} onClick={recordClip} disabled={s.clip.recording} title="Record a 10-second clip (K)">
+              🎥<span className="tool-label">{s.clip.recording ? `REC ${s.clip.seconds}s` : 'Clip'}</span>
+            </button>
+          )}
           <ToolButton panel="settings" icon="⚙️" label="Settings" k="O" />
+          {s.phase === 'afterparty' && (
+            <button className="tool" onClick={() => director.leaveAfterparty()}>
+              🚪<span className="tool-label">Leave the party</span>
+            </button>
+          )}
           {(s.phase === 'playing' || s.phase === 'encore' || (s.phase === 'upload' && s.songId)) && (
             <button className="tool" onClick={() => director.skip()} title="Skip to the end of this song">
               ⏭<span className="tool-label">Skip</span>
@@ -67,12 +86,25 @@ export function Hud() {
             {s.panel === 'mic' && <MicPanel />}
             {s.panel === 'upload' && <UploadPanel />}
             {s.panel === 'settings' && <SettingsPanel />}
+            {s.panel === 'merch' && <MerchPanel />}
+            {s.panel === 'shout' && <ShoutPanel />}
+            {s.panel === 'lights' && <LightsPanel />}
+            {s.panel === 'remix' && <RemixPanel />}
+            {s.panel === 'score' && <ScorePanel />}
           </motion.aside>
         )}
       </AnimatePresence>
 
       <NameCard />
       <Subtitles />
+      <Toasts />
+      {s.clip.url && !s.clip.recording && (
+        <div className="clip-ready">
+          🎥 Clip ready —{' '}
+          <a href={s.clip.url} download={`wild-frequencies-clip.${clipExtension(s.clip.url)}`}>save it</a>
+          <button className="linkish" onClick={() => s.set({ clip: { ...s.clip, url: null } })}>dismiss</button>
+        </div>
+      )}
 
       <footer className="bottombar">
         <HypeMeter />
@@ -109,6 +141,8 @@ function phaseLabel(phase: string, upload: string | null) {
     case 'fakeEnding': return 'The band has "left" the stage…';
     case 'outro': return 'Bows & thank-yous';
     case 'upload': return `Guest track: ${upload ?? '???'}`;
+    case 'openingAct': return 'Opening act: The Crumbs (be nice, it\'s their first gig)';
+    case 'afterparty': return '🎉 Afterparty — backstage, VIPs only';
     default: return 'Wild Frequencies — live';
   }
 }
@@ -140,6 +174,25 @@ function FunButton({ icon, label, k, onPress }: { icon: string; label: string; k
       {icon}
       <span className="tool-label">{label}</span>
     </button>
+  );
+}
+
+function Toasts() {
+  const toasts = useShow((s) => s.toasts);
+  return (
+    <div className="toasts" aria-live="polite">
+      <AnimatePresence>
+        {toasts.map((t) => (
+          <motion.div key={t.id} className="toast" initial={{ y: -30, opacity: 0, scale: 0.8 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -20 }}>
+            <span className="toast-icon">{t.icon}</span>
+            <span>
+              <b>Badge unlocked: {t.title}</b>
+              <small>{t.text}</small>
+            </span>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -179,7 +232,7 @@ function CheerButton() {
 }
 
 function Subtitles() {
-  const { subtitle, lyric, translate, captions, set } = useShow();
+  const { subtitle, lyric, translate, captions, set, phase } = useShow();
   useEffect(() => {
     if (!subtitle) return;
     // stray one-liners (moon, pokes) fade after a while; the director clears banter itself
@@ -194,7 +247,7 @@ function Subtitles() {
     <div className="subtitles" aria-live="polite">
       {lyric && (
         <div className="lyric">
-          <span className="lyric-who">{translate ? '🐱 (translated)' : '🐱'}</span>
+          <span className="lyric-who">{lyric.yours ? '🎤 YOUR LINE' : `${phase === 'openingAct' ? '🐭' : '🐱'}${translate ? ' (translated)' : ''}`}</span>
           {(translate ? lyric.words : lyric.animal).map((w, i) => (
             <span key={`${lyric.id}-${i}`} className={i === lyric.active ? 'syl on' : i < lyric.active ? 'syl done' : 'syl'}>
               {w}

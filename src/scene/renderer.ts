@@ -5,11 +5,12 @@
 
 import { engine } from '../audio/engine';
 import { micSinger } from '../audio/micSinger';
-import { songPlayer } from '../audio/songPlayer';
+import { isYourLine, songPlayer } from '../audio/songPlayer';
 import { trackPlayer } from '../audio/trackPlayer';
 import { conductor } from '../conductor/conductor';
 import { CAST } from '../show/cast';
 import { tickHype } from '../show/hype';
+import { addScore, unlock } from '../show/score';
 import type { CharacterId, LightCue } from '../songs/types';
 import { CHARACTER_TO_INSTRUMENT, isAudible, useShow } from '../state/store';
 import { approach, clamp, type G } from './draw';
@@ -25,6 +26,7 @@ import { Sloth } from './characters/sloth';
 import { Concert } from './concert';
 import { Crowd } from './crowd';
 import { Fog, Particles } from './effects';
+import { drawAfterparty, drawMerchStand, hitMerch, Mice, Rain } from './extras';
 import { LedWall } from './ledWall';
 import { Sky } from './sky';
 import { Lights, StageSet } from './stage';
@@ -67,6 +69,13 @@ export class StageRenderer {
   concert: Concert;
   private lastPhase = '';
   private lastMicNote: string | null = null;
+  private duetNotes = 0;
+  private mice = new Mice();
+  private rain: Rain;
+  private cssW = W;
+  private cssH = H;
+  private fogBurstT = 0;
+  private lastDive = 'none';
 
   constructor(private canvas: HTMLCanvasElement) {
     this.g = canvas.getContext('2d', { alpha: false })!;
@@ -76,6 +85,11 @@ export class StageRenderer {
     this.particles = new Particles(lq);
     this.crowd = new Crowd(lq);
     this.concert = new Concert(this.crowd, this.fox, this.goat, this.roadie);
+    this.rain = new Rain(lq);
+    this.crowd.onDiveDone = () => {
+      unlock('stageDive', 80);
+      this.concert.pop('STAGE DIVE COMPLETE 🤸', 800, 660, '#ffe066', 28);
+    };
     this.band = { cat: this.cat, fox: this.fox, sloth: this.sloth, octopus: this.octopus, owl: this.owl, penguins: this.penguins, goat: this.goat };
     this.drawOrder = [this.octopus, this.owl, this.penguins, this.fox, this.sloth, this.cat];
     this.hitOrder = [this.goat, this.cat, this.sloth, this.fox, this.penguins, this.owl, this.octopus];
@@ -103,19 +117,27 @@ export class StageRenderer {
         else if (S().phase === 'upload') this.cat.sing(midi, 0.3);
       }),
       conductor.on('vocal', (v) => {
-        this.cat.sing(v.midi, v.durSec);
+        if (S().phase === 'openingAct') return this.mice.sing(v.durSec);
+        if (!v.yours) this.cat.sing(v.midi, v.durSec);
+        else if (micSinger.level > 0.25) {
+          // you're actually singing your line
+          addScore(4, 0);
+          if (++this.duetNotes >= 12) unlock('duet');
+        }
         const ly = S().lyric;
         if (ly) S().set({ lyric: { ...ly, active: v.idx } });
       }),
       conductor.on('line', ({ line }) => {
-        S().set({ lyric: line ? { words: line.words, animal: line.animal, active: -1, id: line.id } : null });
+        S().set({ lyric: line ? { words: line.words, animal: line.animal, active: -1, id: line.id, yours: isYourLine(line.id) } : null });
       }),
       conductor.on('backing', ({ syl, durSec }) => this.penguins.sing(syl, durSec)),
       conductor.on('hype', ({ source }) => {
         if (source !== 'click') this.goat.scream();
       }),
-      conductor.on('beat', () => {
+      conductor.on('beat', ({ downbeat }) => {
         if (S().moonJoined) this.sky.tambourine();
+        // haptics: a tiny buzz on every bar line (phones only, opt-out in settings)
+        if (downbeat && S().haptics && this.frameCache.playing && 'vibrate' in navigator) navigator.vibrate?.(12);
       }),
       conductor.on('section', ({ section, song }) => {
         const sec = section.section;
@@ -185,8 +207,28 @@ export class StageRenderer {
     return [(lx - W / 2) / z + cx, (ly - H / 2) / z + cy];
   }
 
-  handleClick(clientX: number, clientY: number) {
+  get canvasEl() {
+    return this.canvas;
+  }
+
+  /** Light remote: a big puff from the fog machines. */
+  fogBurst() {
+    this.fogBurstT = 4;
+  }
+
+  handleClick(clientX: number, clientY: number, pointerType = 'mouse') {
     const S = useShow.getState();
+    // foreground first: beach balls, the merch stand, your capybara
+    const [cx0, cy0] = this.toLayer(clientX, clientY, 0.5);
+    if (S.phase !== 'landing') {
+      if (this.concert.click(cx0, cy0)) return;
+      if (hitMerch(cx0, cy0)) return S.togglePanel('merch');
+      if (this.crowd.hitYou(cx0, cy0)) {
+        if (this.frameCache.playing) this.crowd.startDive();
+        else this.concert.pop('(stage-diving is only allowed during a song)', 800, 700, '#b9aee0', 18);
+        return;
+      }
+    }
     const [wx, wy] = this.toLayer(clientX, clientY, 1);
     for (const c of this.hitOrder) {
       if (c.hitTest(wx, wy)) {
@@ -202,7 +244,16 @@ export class StageRenderer {
     const [cx, cy] = this.toLayer(clientX, clientY, 0.5);
     if (S.phase !== 'landing' && this.concert.click(cx, cy)) return;
     if (cy > 650 && S.phase !== 'landing') {
-      if (this.crowd.raiseLighter(cx, cy)) S.set({ lighters: S.lighters + 1 });
+      if (this.crowd.raiseLighter(cx, cy)) {
+        S.set({ lighters: S.lighters + 1 });
+        addScore(2);
+        return;
+      }
+    }
+    // phones: tap anywhere else to clap on the beat
+    if (pointerType === 'touch' && this.frameCache.playing) {
+      this.concert.clap();
+      if (S.haptics) navigator.vibrate?.(20);
     }
   }
 
@@ -219,6 +270,7 @@ export class StageRenderer {
       s.say('The Moon', lines[n].replace('The Moon: ', ''));
     } else {
       s.set({ moonJoined: true });
+      unlock('moon');
       s.say('The Moon', 'I have waited 4.5 billion years for this. Hit it.');
       conductor.emit('ledText', { text: 'NOW ON TAMBOURINE: THE MOON', seconds: 3.5 });
       engine.applaud(2, 50);
@@ -232,11 +284,15 @@ export class StageRenderer {
     const cw = parent.clientWidth;
     const ch = parent.clientHeight;
     this.dpr = Math.min(window.devicePixelRatio || 1, useShow.getState().lowQuality ? 1.5 : 2);
+    this.cssW = cw;
+    this.cssH = ch;
     this.canvas.width = Math.floor(cw * this.dpr);
     this.canvas.height = Math.floor(ch * this.dpr);
     this.canvas.style.width = `${cw}px`;
     this.canvas.style.height = `${ch}px`;
-    this.fit = Math.min(cw / W, ch / H);
+    // portrait phones: show a narrower slice of the stage (~820 wide) and let
+    // the camera pan to follow the action, instead of a tiny letterboxed stage
+    this.fit = ch > cw ? Math.min(cw / 820, ch / H) : Math.min(cw / W, ch / H);
     this.offX = (cw - W * this.fit) / 2;
     this.offY = (ch - H * this.fit) / 2;
   }
@@ -264,7 +320,7 @@ export class StageRenderer {
     const st = conductor.state;
     const beat = conductor.beat();
     const sec = st.section?.section;
-    const playing = st.playing && (S.phase === 'playing' || S.phase === 'encore' || S.phase === 'upload');
+    const playing = st.playing && (S.phase === 'playing' || S.phase === 'encore' || S.phase === 'upload' || S.phase === 'openingAct');
     return {
       t: (now - this.t0) / 1000,
       dt,
@@ -281,7 +337,9 @@ export class StageRenderer {
       show: S.phase,
       hype: S.hype,
       lowQuality: S.lowQuality,
-      palette: sec?.lights.palette ?? (S.phase === 'upload' ? ['#ff4fd8', '#00e0c6', '#ffe066'] : IDLE_PALETTE),
+      palette: S.lightOverride?.palette
+        ?? sec?.lights.palette
+        ?? (S.phase === 'upload' ? ['#ff4fd8', '#00e0c6', '#ffe066'] : S.phase === 'afterparty' ? ['#ffb347', '#ff6f91', '#ffe29a'] : S.phase === 'openingAct' ? ['#ffd8a8', '#ffb3c7'] : IDLE_PALETTE),
     };
   }
 
@@ -317,6 +375,28 @@ export class StageRenderer {
       this.crowd.youNote = null;
     }
     this.crowd.youLighter = S.lighters > 0;
+    this.crowd.youShirt = S.outfit.shirt;
+    this.crowd.youHat = S.outfit.hat;
+    this.crowd.youExtra = S.outfit.extra;
+    this.crowd.raining = this.rain.amount > 0.3;
+    this.crowd.vipOnly = S.phase === 'afterparty';
+    const ballad = !!conductor.state.song?.ballad && f.playing;
+    this.sky.cloud = approach(this.sky.cloud, S.raining || ballad ? 1 : 0, 0.5, f.dt);
+    this.fog.tint = ballad ? '#9b5cff' : S.raining ? '#8fa3c8' : null;
+    this.rain.update(f, S.raining);
+    this.mice.update(f);
+    if (this.fogBurstT > 0) {
+      this.fogBurstT -= f.dt;
+      this.fog.density = 1;
+    }
+    if (this.crowd.diveState !== this.lastDive) {
+      this.lastDive = this.crowd.diveState;
+      if (this.lastDive === 'stage') {
+        this.cat.say('Who let a capybara up here?! …ok, dance.', 3);
+        this.fox.say('NEW BAND MEMBER', 2);
+      }
+      if (this.lastDive === 'surfing') this.cat.say('…and it\'s gone.', 2);
+    }
 
     if (trackPlayer.active) this.cat.mouthAlong(conductor.state.vocal);
 
@@ -325,7 +405,10 @@ export class StageRenderer {
       c.setOnStage(S.onStage[c.id]);
       c.update(f, !isAudible(CHARACTER_TO_INSTRUMENT[c.id]));
     }
-    const cue: LightCue | null = conductor.state.section?.section.lights ?? null;
+    const ov = S.lightOverride;
+    const cue: LightCue | null = ov
+      ? { palette: ov.palette, movement: ov.movement === 'strobe' && !S.strobe ? 'chase' : ov.movement, lasers: ov.lasers, fog: this.fog.density }
+      : conductor.state.section?.section.lights ?? (S.phase === 'afterparty' ? { palette: f.palette, movement: 'still' } : null);
     const soloist = f.soloist ? this.band[f.soloist] : null;
     this.lights.update(f, cue, soloist && soloist.onStage ? { x: soloist.x, y: soloist.y } : null);
     this.sky.update(f);
@@ -353,12 +436,15 @@ export class StageRenderer {
       cx += Math.sin(f.t * 0.31) * 8;
       cy += Math.sin(f.t * 0.23) * 5;
     }
-    // keep the camera inside the world
-    const halfW = W / 2 / zoom;
-    const halfH = H / 2 / zoom;
+    // portrait: pan to whoever matters (soloist, you on stage, else the singer)
+    const portrait = this.cssH > this.cssW;
+    if (portrait && !(soloist && soloist.onStage)) cx = this.crowd.diveState === 'stage' ? 640 : this.cat.onStage ? this.cat.x : W / 2;
+    // keep the camera inside the world (using how much of it is actually visible)
+    const halfW = Math.min(W / 2, this.cssW / this.fit / 2) / zoom;
+    const halfH = Math.min(H / 2, this.cssH / this.fit / 2) / zoom;
     cx = clamp(cx, halfW, W - halfW);
     cy = clamp(cy, halfH, H - halfH);
-    if (zoom < 1) { cx = W / 2; cy = H / 2; }
+    if (zoom < 1 && !portrait) { cx = W / 2; cy = H / 2; }
     this.cam.zoom = approach(this.cam.zoom, zoom, 1.6, f.dt);
     this.cam.cx = approach(this.cam.cx, cx, 1.6, f.dt);
     this.cam.cy = approach(this.cam.cy, cy, 1.6, f.dt);
@@ -397,8 +483,12 @@ export class StageRenderer {
     this.concert.drawCrowdCam(g, f);
     this.set.drawBack(g, f);
     for (const c of this.drawOrder) c.draw(g, f);
+    if (S.phase === 'openingAct') this.mice.draw(g, f);
+    if (S.phase === 'afterparty') drawAfterparty(g, f);
+    this.crowd.drawYouOnStage(g, f);
     this.roadie.draw(g);
     this.set.drawFront(g, f);
+    this.rain.drawStage(g, f);
     this.goat.draw(g, f);
     this.lights.drawBeams(g, f, cue);
     this.fog.draw(g, f);
@@ -407,8 +497,10 @@ export class StageRenderer {
     // crowd (foreground)
     this.layer(0.5, f);
     this.sky.drawFireflies(g, f);
+    if (S.phase !== 'landing') drawMerchStand(g, f, S.panel === 'merch' || S.raining);
     this.crowd.draw(g, f);
     this.concert.draw(g, f);
+    this.rain.drawFront(g);
 
     // screen-space overlays
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);

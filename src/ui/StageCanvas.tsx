@@ -28,7 +28,7 @@ export function StageCanvas() {
         ref={ref}
         className="stage-canvas"
         aria-label="The stage. Click a band member to poke them, click the moon, or tap the crowd to raise a lighter."
-        onPointerDown={(e) => stageRef.current?.handleClick(e.clientX, e.clientY)}
+        onPointerDown={(e) => stageRef.current?.handleClick(e.clientX, e.clientY, e.pointerType)}
       />
     </div>
   );

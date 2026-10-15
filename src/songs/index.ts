@@ -1,16 +1,20 @@
 import { compileSong, type CompiledSong } from './compile';
 import { eightArms } from './eightArms';
 import { fogMachineHeart } from './fogMachineHeart';
+import { hibernation } from './hibernation';
 import { howlAtTheDisco } from './howlAtTheDisco';
 import { lastCall } from './lastCall';
 import { moonlitStatic } from './moonlitStatic';
+import { squeakEasy } from './openingAct';
 import type { Song } from './types';
 import { velvetClaws } from './velvetClaws';
 
 /** The main set, in default running order. Add your own song here. */
-export const SETLIST: Song[] = [moonlitStatic, velvetClaws, eightArms, fogMachineHeart, howlAtTheDisco];
+export const SETLIST: Song[] = [moonlitStatic, velvetClaws, eightArms, fogMachineHeart, hibernation, howlAtTheDisco];
 export const ENCORE: Song = lastCall;
-export const ALL_SONGS: Song[] = [...SETLIST, ENCORE];
+/** The opening act's one (1) song. */
+export const OPENER: Song = squeakEasy;
+export const ALL_SONGS: Song[] = [...SETLIST, ENCORE, OPENER];
 
 const cache = new Map<string, CompiledSong>();
 export function getCompiled(id: string): CompiledSong {
@@ -26,6 +30,10 @@ export function getCompiled(id: string): CompiledSong {
 
 /** Things Sir Reginald says between songs. Keyed by the song that just finished. */
 export const BANTER: Record<string, string[]> = {
+  'opening-act': [
+    'Brie: um. thank you. we are The Crumbs.',
+    'Cheddar: our merch is one (1) cracker. it is at the back.',
+  ],
   'pre-show': [
     'Good evening, Hollow Log Amphitheater! We are WILD FREQUENCIES.',
     'Please silence your crickets.',
@@ -45,6 +53,10 @@ export const BANTER: Record<string, string[]> = {
   'fog-machine-heart': [
     'That was a ballad. I cried. It was the fog.',
     'It is always the fog.',
+  ],
+  hibernation: [
+    'That one goes out to everyone who should be asleep right now.',
+    'Which is all of you. It is 2am. You are a deer.',
   ],
   'howl-at-the-disco': [
     'Somebody please check on the hedgehog.',

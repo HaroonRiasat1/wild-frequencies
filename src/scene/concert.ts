@@ -5,6 +5,7 @@
 import * as Tone from 'tone';
 import { engine } from '../audio/engine';
 import { conductor } from '../conductor/conductor';
+import { addScore, unlock } from '../show/score';
 import { isAudible, useShow } from '../state/store';
 import type { Frame } from './characters/base';
 import type { Fox } from './characters/fox';
@@ -122,9 +123,12 @@ export class Concert {
     const err = Math.min(frac, 1 - frac) * (60 / conductor.state.bpm);
     if (err < 0.06) {
       this.streak++;
+      addScore(10);
+      unlock('firstClap');
       this.pop(this.streak >= 4 ? `PERFECT ×${this.streak}` : 'PERFECT!', 800, 700, '#39ff14', 24);
     } else if (err < 0.12) {
       this.streak++;
+      addScore(5);
       this.pop('good', 800, 700, '#2bf1ff', 20);
     } else {
       this.streak = 0;
@@ -135,6 +139,7 @@ export class Concert {
       conductor.emit('ledText', { text: '👏 THE WHOLE CROWD IS CLAPPING 👏', seconds: 3 });
       this.bumpHype(0.15);
       this.streak = 0;
+      unlock('clapStreak');
     }
   }
 
@@ -145,6 +150,7 @@ export class Concert {
     engine.cheerStart();
     Tone.getContext().setTimeout(() => engine.cheerStop(), 1.6);
     this.pop('🌊 THE WAVE! 🌊', 800, 620, '#2bf1ff', 30);
+    addScore(10);
     this.bumpHype(0.05);
   }
 
@@ -177,6 +183,8 @@ export class Concert {
         b.vy = -950;
         b.vx = (b.x - cx) * 9 + (Math.random() - 0.5) * 200;
         this.pop('BONK!', b.x, b.y - 40, '#ffe066', 26);
+        addScore(5);
+        unlock('bonk', 20);
         this.bumpHype(0.03);
         return true;
       }
@@ -218,7 +226,7 @@ export class Concert {
     s.set({ hype: Math.min(1, s.hype + d) });
   }
 
-  private pop(text: string, x: number, y: number, col: string, size: number) {
+  pop(text: string, x: number, y: number, col: string, size: number) {
     this.popups.push({ text, x, y, t: 1.6, col, size });
     if (this.popups.length > 8) this.popups.shift();
   }
@@ -276,6 +284,8 @@ export class Concert {
       if (t.kind === 'shirt') this.crowd.youShirt = t.col;
       this.crowd.youWave = 1;
       this.pop(`YOU CAUGHT ${item.toUpperCase()}!`, 800, 680, '#ffe066', 28);
+      unlock(t.kind === 'shirt' ? 'shirt' : 'drumstick', 75);
+      if (t.kind === 'shirt') useShow.getState().set({ outfit: { ...useShow.getState().outfit, shirt: t.col } });
       this.bumpHype(0.08);
     } else {
       if (t.kind === 'shirt') t.target.shirt = t.col;

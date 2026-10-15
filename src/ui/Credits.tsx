@@ -2,10 +2,11 @@ import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { CAST, WALK_ON_ORDER } from '../show/cast';
 import { director } from '../show/director';
+import { ACHIEVEMENTS, bestScore } from '../show/score';
 import { useShow } from '../state/store';
 
 export function Credits() {
-  const { setLog, lighters, moonJoined, sunglasses, encoreUnlocked } = useShow();
+  const { setLog, lighters, moonJoined, sunglasses, encoreUnlocked, score, achievements } = useShow();
   const [copied, setCopied] = useState(false);
 
   const share = async () => {
@@ -16,6 +17,7 @@ export function Credits() {
       moonJoined ? '🌕 The moon played tambourine.' : '',
       lighters ? `🔥 ${lighters} lighter(s) raised` : '',
       sunglasses ? '😎 Everyone wore sunglasses.' : '',
+      `⭐ ${score.toLocaleString()} points · ${achievements.length} badges: ${achievements.map((a) => ACHIEVEMENTS[a]?.icon).join(' ')}`,
     ].filter(Boolean);
     const text = lines.join('\n');
     try {
@@ -37,7 +39,8 @@ export function Credits() {
   const roll = [
     ...WALK_ON_ORDER.slice().reverse().map((id) => [CAST[id].role, CAST[id].name]),
     ['Roadie, mic check, pizza theft', 'Trash Panda Pete'],
-    ['Crowd surfing', 'A small frog (uninjured)'],
+    ['Opening act', 'The Crumbs (Brie & Cheddar)'],
+    ['Crowd surfing', 'A small frog (uninjured), occasionally a bear'],
     ...(moonJoined ? [['Guest tambourine', 'The Moon']] : []),
     ['Fog', 'Too much'],
     ['Catering', 'A badger with a bar tab'],
@@ -67,7 +70,14 @@ export function Credits() {
             </li>
           ))}
         </ol>
+        <p className="credits-score">
+          ⭐ <b>{score.toLocaleString()}</b> points · best {bestScore().toLocaleString()}
+          <br />
+          {achievements.map((a) => <span key={a} title={ACHIEVEMENTS[a]?.title}>{ACHIEVEMENTS[a]?.icon}</span>)}
+          {!achievements.length && <small>no badges — next time, clap on the beat</small>}
+        </p>
         <div className="credits-buttons">
+          <button className="big-btn alt" onClick={() => director.afterparty()}>🎉 Go to the afterparty</button>
           <button className="big-btn" onClick={() => director.playAgain()}>🔁 Play again</button>
           <button className="big-btn alt" onClick={share}>📤 {copied ? 'Copied!' : 'Share your set'}</button>
         </div>

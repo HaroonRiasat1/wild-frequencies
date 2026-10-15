@@ -4,6 +4,7 @@
 // rotating cast of crowd surfers. Front and centre: YOU, a capybara.
 
 import { circ, ell, eye, limb, poly, rgba, rr, sunglasses, type G } from './draw';
+import { unlock } from '../show/score';
 import type { Frame } from './characters/base';
 
 type Kind = 'raccoon' | 'deer' | 'hedgehog' | 'bear';
@@ -53,6 +54,13 @@ export class Crowd {
   youNote: string | null = null;
   youShirt: string | null = null;
   youWave = 0;
+  youHat: 'none' | 'ears' | 'crown' | 'bucket' = 'none';
+  youExtra: 'none' | 'paw' | 'necklace' = 'none';
+  raining = false;
+  /** Only a few VIPs stay for the afterparty. */
+  vipOnly = false;
+  onDiveDone: (() => void) | null = null;
+  private dive: { state: 'none' | 'climbing' | 'stage' | 'surfing'; t: number; x: number } = { state: 'none', t: 0, x: 800 };
   private waveX: number | null = null;
 
   constructor(lowQuality: boolean) {
@@ -155,11 +163,15 @@ export class Crowd {
       const near = this.waveX !== null ? Math.max(0, 1 - Math.abs(this.waveX - fan.x) / 140) : 0;
       fan.wave = Math.max(near, fan.wave - f.dt * 2.5);
     }
+    this.updateDive(f.dt);
     this.youWave = this.waveX !== null ? Math.max(0, 1 - Math.abs(this.waveX - 800) / 140) : Math.max(0, this.youWave - f.dt * 2.5);
     if (this.surfer) {
       this.surfer.t += f.dt;
       this.surfer.x += f.dt * (this.surfer.kind === 'bear' ? 120 : 190);
-      if (this.surfer.x > 1720) this.surfer = null;
+      if (this.surfer.x > 1720) {
+        if (this.surfer.kind === 'bear') unlock('bear');
+        this.surfer = null;
+      }
     }
   }
 
@@ -173,7 +185,8 @@ export class Crowd {
 
   draw(g: G, f: Frame) {
     const rim = f.palette[Math.floor(f.beat / 4) % Math.max(1, f.palette.length)] ?? '#7b2cff';
-    for (const fan of this.fans) this.fan(g, f, fan, this.bobFor(f, fan), rim);
+    const fans = this.vipOnly ? this.fans.filter((_, i) => i % 6 === 0) : this.fans;
+    for (const fan of fans) this.fan(g, f, fan, this.bobFor(f, fan), rim);
     this.drawYou(g, f, rim);
     if (this.surfer) this.drawSurfer(g, f);
   }
@@ -236,6 +249,15 @@ export class Crowd {
     }
     // body (+ souvenir shirt) + head
     ell(g, 0, -20, 42, 38, fan.shirt ?? c);
+    if (this.raining && !fan.shirt) {
+      // free ponchos (see-through, crinkly, very glamorous)
+      ell(g, 0, -24, 46, 42, 'rgba(255,236,90,0.55)');
+      g.strokeStyle = 'rgba(255,255,255,0.5)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(-20, -50); g.lineTo(-14, -2); g.moveTo(16, -48); g.lineTo(20, -4);
+      g.stroke();
+    }
     if (fan.shirt) {
       g.fillStyle = '#fff';
       g.font = '900 11px system-ui';
@@ -352,17 +374,13 @@ export class Crowd {
     ell(g, x, y - 10, 2, 4, '#fff6d0');
   }
 
-  private drawYou(g: G, f: Frame, rim: string, portrait = false) {
-    const x = 800;
-    const y = 900;
-    const bob = (f.reduceMotion ? 0.3 : 1) * Math.pow(1 - f.phase, 2) * 9 * (f.playing ? 1 : 0.2) + this.youWave * 30;
-    g.save();
-    g.translate(x, y - bob);
-    g.scale(1.15, 1.15);
+  /** The capybara itself (feet at 0,0), in whatever outfit you bought. */
+  private capy(g: G, f: Frame, rim: string, opts: { arms?: number; mouth?: number; eyes?: number; lighter?: boolean }) {
     const C = '#9b6b43';
-    if (this.youWave > 0.2 || portrait) {
-      limb(g, -30, -40, -46, -120, 12, C);
-      limb(g, 30, -40, 46 + Math.sin(f.t * 10) * 8, -120, 12, C);
+    const arms = opts.arms ?? 0;
+    if (arms > 0.2) {
+      limb(g, -30, -40, -46, -40 - 80 * arms, 12, C);
+      limb(g, 30, -40, 46 + Math.sin(f.t * 10) * 8, -40 - 80 * arms, 12, C);
     }
     ell(g, 0, -22, 50, 40, this.youShirt ?? C);
     if (this.youShirt) {
@@ -371,26 +389,139 @@ export class Crowd {
       g.textAlign = 'center';
       g.fillText('WILD FREQ', 0, -14);
     }
-    if (this.youLighter && !portrait) {
+    if (this.youExtra === 'necklace') {
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.strokeStyle = NEON[Math.floor(f.t * 2) % NEON.length];
+      g.lineWidth = 4;
+      g.beginPath();
+      g.arc(0, -56, 26, 0.2, Math.PI - 0.2);
+      g.stroke();
+      g.restore();
+    }
+    if (opts.lighter) {
       limb(g, 30, -40, 46, -110, 12, C);
       this.lighter(g, f, 46, -118);
+    }
+    if (this.youExtra === 'paw') {
+      limb(g, -30, -40, -52, -128, 12, C);
+      ell(g, -56, -150, 18, 24, '#ff2e63');
+      g.fillStyle = '#fff';
+      g.font = '900 11px system-ui';
+      g.textAlign = 'center';
+      g.fillText('#1', -56, -146);
     }
     // capybara: boxy head, tiny ears, unbothered expression
     rr(g, -34, -122, 68, 62, 24, C);
     circ(g, -24, -120, 7, '#7a5233');
     circ(g, 24, -120, 7, '#7a5233');
     rr(g, -24, -88, 48, 30, 14, '#8a5c38');
-    eye(g, -15, -102, 4.5, portrait ? 1 : 0.55, 0, 0, '#1a0f08');
-    eye(g, 15, -102, 4.5, portrait ? 1 : 0.55, 0, 0, '#1a0f08');
+    eye(g, -15, -102, 4.5, opts.eyes ?? 0.55, 0, 0, '#1a0f08');
+    eye(g, 15, -102, 4.5, opts.eyes ?? 0.55, 0, 0, '#1a0f08');
     if (f.sunglasses) sunglasses(g, 0, -102, 44);
     ell(g, -7, -82, 3, 2, '#3a2416');
     ell(g, 7, -82, 3, 2, '#3a2416');
-    if (this.youSinging > 0.05 || portrait) ell(g, 0, -68, 6, 3 + Math.max(this.youSinging, portrait ? 0.6 : 0) * 9, '#3a0f22');
+    const m = opts.mouth ?? 0;
+    if (m > 0.05) ell(g, 0, -68, 6, 3 + m * 9, '#3a0f22');
+    // hats
+    if (this.youHat === 'ears') {
+      for (const sd of [-1, 1]) poly(g, [sd * 8, -120, sd * 30, -150, sd * 32, -116], '#5b1a7a');
+      rr(g, -32, -126, 64, 8, 4, '#5b1a7a');
+    } else if (this.youHat === 'crown') {
+      poly(g, [-22, -118, -22, -140, -11, -128, 0, -146, 11, -128, 22, -140, 22, -118], '#ffd23f');
+      circ(g, 0, -138, 3, '#ff2e63');
+    } else if (this.youHat === 'bucket') {
+      ell(g, 0, -118, 44, 9, '#2ec4b6');
+      rr(g, -28, -144, 56, 28, 10, '#2ec4b6');
+    }
     g.strokeStyle = rgba(rim, 0.6);
     g.lineWidth = 3;
     g.beginPath();
     g.arc(0, -100, 34, Math.PI * 1.15, Math.PI * 1.85);
     g.stroke();
+  }
+
+  /** Click on your capybara to stage-dive (only while a song is playing). */
+  hitYou(cx: number, cy: number): boolean {
+    return this.dive.state === 'none' && Math.abs(cx - 800) < 60 && cy > 740 && cy < 905;
+  }
+
+  startDive() {
+    if (this.dive.state === 'none') this.dive = { state: 'climbing', t: 0, x: 800 };
+  }
+
+  get diveState() {
+    return this.dive.state;
+  }
+
+  private updateDive(dt: number) {
+    const d = this.dive;
+    if (d.state === 'none') return;
+    d.t += dt;
+    if (d.state === 'climbing' && d.t > 1.2) this.dive = { state: 'stage', t: 0, x: 640 };
+    else if (d.state === 'stage' && d.t > 9) this.dive = { state: 'surfing', t: 0, x: 640 };
+    else if (d.state === 'surfing') {
+      d.x += dt * 170;
+      if (d.x > 1680) {
+        this.dive = { state: 'none', t: 0, x: 800 };
+        this.onDiveDone?.();
+      }
+    }
+  }
+
+  /** Stage layer: you, dancing next to the band. */
+  drawYouOnStage(g: G, f: Frame) {
+    if (this.dive.state !== 'stage') return;
+    const bob = Math.pow(1 - f.phase, 2) * 14;
+    g.save();
+    g.translate(640, 652 - bob);
+    g.rotate(Math.sin(f.beat * Math.PI) * 0.15);
+    g.scale(0.85, 0.85);
+    this.capy(g, f, '#ffe066', { arms: 1, mouth: 0.7, eyes: 1 });
+    g.restore();
+    g.fillStyle = '#ffe066';
+    g.font = '900 16px "Trebuchet MS", system-ui';
+    g.textAlign = 'center';
+    g.fillText('YOU (on stage!!)', 640, 530 - bob);
+  }
+
+  private drawYou(g: G, f: Frame, rim: string, portrait = false) {
+    const d = this.dive;
+    if (!portrait && d.state === 'stage') return;
+    if (!portrait && d.state === 'climbing') {
+      const u = Math.min(1, d.t / 1.2);
+      g.save();
+      g.translate(800 - 140 * u, 900 - 210 * u - Math.sin(u * Math.PI) * 60);
+      g.scale(1.15 - 0.4 * u, 1.15 - 0.4 * u);
+      this.capy(g, f, rim, { arms: 1, eyes: 1 });
+      g.restore();
+      return;
+    }
+    if (!portrait && d.state === 'surfing') {
+      g.save();
+      g.translate(d.x, 700 + Math.sin(d.t * 6) * 10);
+      g.rotate(-Math.PI / 2 + Math.sin(d.t * 3) * 0.2);
+      g.scale(0.8, 0.8);
+      this.capy(g, f, rim, { arms: 1, eyes: 1, mouth: 0.8 });
+      g.restore();
+      g.fillStyle = '#ffe066';
+      g.font = '900 15px system-ui';
+      g.textAlign = 'center';
+      g.fillText('YOU (surfing)', d.x, 640);
+      return;
+    }
+    const x = 800;
+    const y = 900;
+    const bob = (f.reduceMotion ? 0.3 : 1) * Math.pow(1 - f.phase, 2) * 9 * (f.playing ? 1 : 0.2) + this.youWave * 30;
+    g.save();
+    g.translate(x, y - bob);
+    g.scale(1.15, 1.15);
+    this.capy(g, f, rim, {
+      arms: portrait ? 1 : this.youWave > 0.2 ? 1 : 0,
+      eyes: portrait ? 1 : 0.55,
+      mouth: Math.max(this.youSinging, portrait ? 0.6 : 0),
+      lighter: this.youLighter && !portrait,
+    });
     g.restore();
     if (portrait) return;
     // label

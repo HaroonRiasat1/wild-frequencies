@@ -11,6 +11,8 @@ export class Fog {
   private puffs: Puff[] = [];
   private sprite: HTMLCanvasElement;
   density = 0.6;
+  /** Override colour (the ballad turns the fog purple). */
+  tint: string | null = null;
   private shown = 0.6;
 
   constructor(lowQuality: boolean) {
@@ -41,7 +43,7 @@ export class Fog {
   }
 
   draw(g: G, f: Frame) {
-    const tint = f.palette[0] ?? '#b9a7ff';
+    const tint = this.tint ?? f.palette[0] ?? '#b9a7ff';
     g.save();
     g.globalAlpha = 1;
     for (const p of this.puffs) {

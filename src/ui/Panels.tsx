@@ -100,7 +100,7 @@ export function Setlist() {
 }
 
 export function MicPanel() {
-  const { micActive, micAnimal, micNote, set } = useShow();
+  const { micActive, micAnimal, micNote, duet, set } = useShow();
   const [err, setErr] = useState<string | null>(null);
   const animals: { id: MicAnimal; label: string }[] = [
     { id: 'cat', label: '🐱 Cat' },
@@ -140,6 +140,13 @@ export function MicPanel() {
           </button>
         ))}
       </div>
+      <label className="setting">
+        <input type="checkbox" checked={duet} onChange={(e) => set({ duet: e.target.checked })} />
+        <span>
+          Duet with Sir Reginald
+          <small>every second lyric line is yours — the cat rests, the subtitles say 🎤 YOUR LINE</small>
+        </span>
+      </label>
       {micActive ? (
         <>
           <div className="mic-note" aria-live="polite">{micNote ? `♪ ${micNote}` : '…listening…'}</div>
@@ -225,7 +232,7 @@ export function UploadPanel() {
 
 export function SettingsPanel() {
   const s = useShow();
-  const row = (label: string, value: boolean, key: 'reduceMotion' | 'strobe' | 'captions' | 'translate' | 'lowQuality', hint?: string) => (
+  const row = (label: string, value: boolean, key: 'reduceMotion' | 'strobe' | 'captions' | 'translate' | 'lowQuality' | 'haptics', hint?: string) => (
     <label className="setting">
       <input type="checkbox" checked={value} onChange={(e) => s.set({ [key]: e.target.checked })} />
       <span>
@@ -241,6 +248,18 @@ export function SettingsPanel() {
       {row('Strobe flashes', s.strobe, 'strobe', '⚠ flashing lights — off by default')}
       {row('Captions', s.captions, 'captions', 'lyrics + banter subtitles')}
       {row('Translate meows', s.translate, 'translate', 'show the human lyrics')}
+      {row('Haptics', s.haptics, 'haptics', 'phones buzz on the beat')}
+      <label className="setting">
+        <span>
+          Weather
+          <small>auto = it might rain mid-set</small>
+        </span>
+        <select value={s.weather} onChange={(e) => s.set({ weather: e.target.value as 'auto' | 'rain' | 'clear', raining: e.target.value === 'rain' && s.phase !== 'landing' ? true : e.target.value === 'clear' ? false : s.raining })}>
+          <option value="auto">auto</option>
+          <option value="rain">rain</option>
+          <option value="clear">clear skies</option>
+        </select>
+      </label>
       {row('Low quality', s.lowQuality, 'lowQuality', 'fewer particles/fog (reload to fully apply)')}
       <label className="slider">
         Volume
@@ -252,6 +271,7 @@ export function SettingsPanel() {
         <li><kbd>1</kbd>–<kbd>7</kbd> poke a band member</li>
         <li><kbd>S</kbd> setlist · <kbd>M</kbd> mixer · <kbd>V</kbd> sing · <kbd>U</kbd> upload · <kbd>O</kbd> settings</li>
         <li><kbd>T</kbd> translate · <kbd>C</kbd> captions · <kbd>L</kbd> lighter · <kbd>N</kbd> skip song</li>
+        <li><kbd>Y</kbd> shout · <kbd>X</kbd> lights · <kbd>R</kbd> remix · <kbd>K</kbd> record a clip · click the merch stand or your capybara</li>
         <li><kbd>H</kbd> clap on the beat · <kbd>W</kbd> Mexican wave · <kbd>J</kbd> beach ball · <kbd>G</kbd> T-shirt cannon</li>
         <li><kbd>+</kbd>/<kbd>-</kbd> volume · <kbd>Esc</kbd> close panel</li>
       </ul>

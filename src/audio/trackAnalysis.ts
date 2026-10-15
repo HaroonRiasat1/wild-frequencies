@@ -4,6 +4,7 @@
 // band can play *exactly* on the beat instead of reacting late in real time.
 
 import type { CharacterId, DrumKind, LedMode, LightCue, SectionKind } from '../songs/types';
+import { detectKey, type KeyInfo } from './keyDetect';
 import { detectVocals } from './vocalDetect';
 
 const SR = 22050;
@@ -23,6 +24,8 @@ export interface TrackSection {
 }
 
 export interface TrackMap {
+  /** Detected key + one chord per bar (for penguin harmonies and mic autotune). */
+  key: KeyInfo;
   duration: number;
   bpm: number;
   /** Median distance (ms) from detected drum hits to the 16th grid — lower = tighter. */
@@ -303,6 +306,7 @@ export async function analyzeTrack(buf: AudioBuffer): Promise<TrackMap> {
     energy,
     frameRate: FPS,
     sections: buildSections(beats, downbeat, energy, vocal, buf.duration),
+    key: await detectKey(buf, beats, downbeat),
   };
 }
 

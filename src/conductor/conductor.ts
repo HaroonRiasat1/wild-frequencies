@@ -13,7 +13,7 @@ export interface ConductorEvents {
   solo: { who: CharacterId | null };
   hit: { kind: DrumKind; vel: number };
   note: { who: CharacterId; midi: number; dur: number; vel: number };
-  vocal: VocalEv & { durSec: number };
+  vocal: VocalEv & { durSec: number; yours?: boolean };
   backing: { midis: number[]; syl: string; durSec: number };
   line: { line: LyricLine | null };
   hype: { source: 'song' | 'cheer' | 'click' };

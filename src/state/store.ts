@@ -11,10 +11,30 @@ export type Phase =
   | 'encore'
   | 'outro'
   | 'credits'
-  | 'upload';
+  | 'upload'
+  | 'openingAct'
+  | 'afterparty';
 
 export type MicAnimal = 'cat' | 'goat' | 'penguin' | 'wolf';
-export type Panel = 'mixer' | 'setlist' | 'mic' | 'upload' | 'settings' | null;
+export type Panel = 'mixer' | 'setlist' | 'mic' | 'upload' | 'settings' | 'merch' | 'shout' | 'lights' | 'remix' | 'score' | null;
+
+export type Movement = 'still' | 'sweep' | 'chase' | 'pulse' | 'strobe';
+export interface LightOverride {
+  palette: string[];
+  movement: Movement;
+  lasers: boolean;
+}
+export interface Outfit {
+  shirt: string | null;
+  hat: 'none' | 'ears' | 'crown' | 'bucket';
+  extra: 'none' | 'paw' | 'necklace';
+}
+export interface Toast {
+  id: number;
+  icon: string;
+  title: string;
+  text: string;
+}
 
 export interface Subtitle {
   speaker: string;
@@ -27,6 +47,8 @@ export interface LyricState {
   animal: string[];
   active: number;
   id: number;
+  /** Duet mode: this line is yours to sing. */
+  yours?: boolean;
 }
 
 export interface SetLogEntry {
@@ -101,6 +123,20 @@ interface State {
   headliner: { name: string } | null;
   trackBpm: number | null;
   analysing: boolean;
+  detectedKey: string | null;
+
+  score: number;
+  achievements: string[];
+  toasts: Toast[];
+  acorns: number;
+  outfit: Outfit;
+  duet: boolean;
+  lightOverride: LightOverride | null;
+  haptics: boolean;
+  weather: 'auto' | 'rain' | 'clear';
+  raining: boolean;
+  clip: { recording: boolean; url: string | null; seconds: number };
+  stageDive: 'none' | 'climbing' | 'stage' | 'surfing';
 
   set: (p: Partial<State>) => void;
   toggleMute: (id: InstrumentId) => void;
@@ -153,6 +189,20 @@ export const useShow = create<State>((set, get) => ({
   headliner: null,
   trackBpm: null,
   analysing: false,
+  detectedKey: null,
+
+  score: 0,
+  achievements: [],
+  toasts: [],
+  acorns: 30,
+  outfit: { shirt: null, hat: 'none', extra: 'none' },
+  duet: false,
+  lightOverride: null,
+  haptics: !!isMobile,
+  weather: 'auto',
+  raining: false,
+  clip: { recording: false, url: null, seconds: 0 },
+  stageDive: 'none',
 
   set: (p) => set(p),
   toggleMute: (id) => set({ muted: { ...get().muted, [id]: !get().muted[id] } }),

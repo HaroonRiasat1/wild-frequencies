@@ -33,9 +33,6 @@ export function App() {
       {phase !== 'landing' && phase !== 'credits' && <Hud />}
       <AnimatePresence>{phase === 'landing' && <Landing key="landing" />}</AnimatePresence>
       <AnimatePresence>{phase === 'credits' && <Credits key="credits" />}</AnimatePresence>
-      <div className="rotate-hint" aria-hidden>
-        🔄 Turn your phone sideways — the band needs the whole stage.
-      </div>
     </main>
   );
 }

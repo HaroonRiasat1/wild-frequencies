@@ -14,7 +14,7 @@ const LO_HZ = 220;
 const HI_HZ = 3500;
 
 /** In-place radix-2 FFT. */
-function fft(re: Float32Array, im: Float32Array) {
+export function fft(re: Float32Array, im: Float32Array) {
   const n = re.length;
   for (let i = 1, j = 0; i < n; i++) {
     let bit = n >> 1;

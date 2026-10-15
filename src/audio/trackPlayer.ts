@@ -36,7 +36,7 @@ class TrackPlayer {
     this.secIndex = -1;
 
     const pseudo: Song = {
-      id: 'headliner', title: name, tagline: 'your track', bpm: map.bpm, key: '?', tonic: 'C', scale: 'minor', voice: 'cat',
+      id: 'headliner', title: name, tagline: 'your track', bpm: map.bpm, key: map.key.label, tonic: map.key.tonic, scale: map.key.scale, voice: 'cat',
       progression: ['C'], drumPatterns: {}, bassPatterns: {}, keysPatterns: {}, sections: [],
     };
     this.pseudo = pseudo;
@@ -52,6 +52,24 @@ class TrackPlayer {
 
     const draw = Tone.getDraw();
     const sectionAt = (t: number) => map.sections.find((s) => t >= s.start && t < s.end);
+    // penguin harmony: the detected chord of each bar, voiced around G4
+    const chordAt = (t: number): number[] => {
+      const bars = map.key.bars;
+      let c = bars[0];
+      for (const b of bars) if (b.t <= t + 0.05) c = b; else break;
+      if (!c) return [67, 71, 74];
+      const root = 60 + c.root;
+      const tones = [root, root + (c.minor ? 3 : 4), root + 7].map((m) => (m < 62 ? m + 12 : m));
+      return tones.sort((a, b) => a - b);
+    };
+    const barDur = (60 / map.bpm) * 4;
+    map.key.bars.forEach((bar) => {
+      const sec = sectionAt(bar.t + 0.1);
+      if (!sec || !(sec.kind === 'chorus' || sec.kind === 'drop' || sec.kind === 'bridge' || sec.kind === 'solo')) return;
+      tr.schedule((time) => {
+        chordAt(bar.t).forEach((m, k) => engine.penguins[k]?.sing(m, barDur * 0.9, time + k * 0.01, 'ooh', 0.45));
+      }, bar.t);
+    });
 
     // beats -> bounce, tambourine, and "the band is playing" note events
     map.beats.forEach((t, i) => {
@@ -65,7 +83,7 @@ class TrackPlayer {
           if (((b % 4) + 4) % 4 === 0) conductor.emit('bar', { bar: Math.floor(b / 4), chord: '' });
           conductor.emit('note', { who: 'owl', midi: 60 + (((b % 8) + 8) % 8), dur: 2, vel: big ? 1 : 0.5 });
           if (sec && sec.kind !== 'intro') conductor.emit('note', { who: 'fox', midi: 64 + (((b % 5) + 5) % 5), dur: 2, vel: big ? 1 : 0.6 });
-          if (big && ((b % 4) + 4) % 4 === 0) conductor.emit('backing', { midis: [67, 71, 74], syl: 'ooh', durSec: (60 / map.bpm) * 3 });
+          if (big && ((b % 4) + 4) % 4 === 0) conductor.emit('backing', { midis: chordAt(t), syl: 'ooh', durSec: (60 / map.bpm) * 3 });
         }, time);
       }, t);
     });
@@ -92,7 +110,7 @@ class TrackPlayer {
     tr.scheduleOnce((time) => draw.schedule(() => this.finish(), time), map.duration + 0.4);
 
     conductor.state.bpm = map.bpm;
-    conductor.state.song = null; // mic mode snaps to semitones (we don't know the key)
+    conductor.state.song = pseudo; // mic mode autotunes to the detected key
     conductor.state.playing = true;
     this.restoreBeat = conductor.state.beatSource;
     conductor.state.beatSource = () => this.beatAt(tr.getSecondsAtTime(Tone.immediate()));
