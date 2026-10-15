@@ -29,10 +29,11 @@ export class Cat extends Character {
 
   /** User tracks: mouth along to the analysed vocal energy (no lyrics, just conviction). */
   mouthAlong(level: number) {
-    if (this.frozen || level < 0.3) return;
-    this.mouth = Math.max(this.mouth, 0.2 + (level - 0.3) / 0.7);
-    this.hit = Math.max(this.hit, level * 0.6);
-    if (level > 0.9) this.highNote = Math.max(this.highNote, 0.25);
+    // level is 0 whenever the singer isn't singing, so instrumentals keep the mouth shut
+    if (this.frozen || level <= 0.05) return;
+    this.mouth = Math.max(this.mouth, level);
+    this.hit = Math.max(this.hit, level * 0.5);
+    if (level > 0.92) this.highNote = Math.max(this.highNote, 0.2);
   }
 
   override update(f: Frame, muted: boolean) {

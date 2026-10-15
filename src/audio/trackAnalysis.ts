@@ -4,6 +4,7 @@
 // band can play *exactly* on the beat instead of reacting late in real time.
 
 import type { CharacterId, DrumKind, LedMode, LightCue, SectionKind } from '../songs/types';
+import { detectVocals } from './vocalDetect';
 
 const SR = 22050;
 const HOP = 256;
@@ -31,7 +32,7 @@ export interface TrackMap {
   /** Index into `beats` of the first downbeat (bar line). */
   downbeat: number;
   onsets: { t: number; kind: DrumKind; vel: number }[];
-  /** Vocal-band energy 0..1, one value per analysis frame. */
+  /** Singer's mouth opening 0..1 per analysis frame — 0 when only the band is playing. */
   vocal: Float32Array;
   /** Overall energy 0..1 per analysis frame. */
   energy: Float32Array;
@@ -285,7 +286,8 @@ export async function analyzeTrack(buf: AudioBuffer): Promise<TrackMap> {
     const r = p97 - p10 || 1;
     return s.map((v) => Math.max(0, Math.min(1, (v - p10) / r)));
   };
-  const vocal = norm(voc);
+  // the mouth follows the isolated lead voice, not the whole mid-range (which is mostly synths)
+  const vocal = (await detectVocals(buf, FPS)).mouth;
   const total = new Float32Array(frames);
   for (let i = 0; i < frames; i++) total[i] = low[i] + voc[i] + sn[i] + hat[i];
   const energy = norm(total);

@@ -115,7 +115,11 @@ instrumental / bridge / outro from phrase energy and vocal presence.
 `audio/trackPlayer.ts` then plays the file *on* `Tone.Transport`
 (`player.sync()`) and schedules every beat, onset and section on the same
 transport, so hits land on the audio (measured: median 0.2 ms, 90% within
-7 ms). The cat mouths along to the vocal-band energy — no lyrics are shown.
+7 ms). The cat's mouth follows the *singer only* (`audio/vocalDetect.ts`): an STFT
+keeps the centre of the stereo image (where lead vocals sit), harmonic /
+percussive median filtering strips out drum hits, and a hysteresis gate on the
+voice-band syllable envelope decides when someone is actually singing — so the
+mouth stays shut through intros and instrumental bars. No lyrics are shown.
 The headliner file is kept in the browser's IndexedDB only; it is never copied
 into the project or the build. (`audio/beatDetector.ts` is the older real-time
 `AnalyserNode` detector, kept as a reference.)
