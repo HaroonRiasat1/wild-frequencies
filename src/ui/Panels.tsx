@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { micSinger } from '../audio/micSinger';
 import { director } from '../show/director';
-import { ENCORE, SETLIST } from '../songs';
+import { COVERS, ENCORE, SETLIST } from '../songs';
 import { INSTRUMENTS, useShow, type MicAnimal } from '../state/store';
 
 export function Mixer() {
@@ -94,6 +94,31 @@ export function Setlist() {
           </span>
           <span className="sl-act">{songId === ENCORE.id ? '♪ now' : ''}</span>
         </li>
+      </ol>
+      <h3 className="covers-head">★ Famous covers (request only)</h3>
+      <p className="panel-sub">Public-domain classics, re-arranged by animals who should know better.</p>
+      <ol className="setlist">
+        {COVERS.map((c) => {
+          const isPlayed = played.includes(c.id);
+          const now = songId === c.id;
+          return (
+            <li key={c.id} className={`${isPlayed ? 'played' : ''} ${now ? 'now' : ''}`}>
+              <span className="sl-num">♫</span>
+              <span className="sl-title">
+                {c.title}
+                <small>{c.tagline}</small>
+              </span>
+              <span className="sl-act">
+                {now ? '♪ now' : isPlayed ? '✓' : requested === c.id ? '★ next' : canRequest ? (
+                  <>
+                    <button onClick={() => director.request(c.id, false)} title="Play this next">next</button>
+                    <button onClick={() => director.request(c.id, true)} title="Play this right now">now!</button>
+                  </>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

@@ -43,7 +43,20 @@ working on songs).
 5. **Fake ending** – the band "leaves". Fill the hype meter to unlock the encore.
 6. **Outro** – bows, rolling credits with your score and badges, *Play again* / *Share your set* / **🎉 Go to the afterparty** (backstage: Gary finally tunes, Octavia signs eight autographs at once, Greg eats the setlist).
 
-All melodies, lyrics and progressions are original. Every song runs 1:40–2:05.
+**Famous covers (request only)** — on the paper setlist, or shout the title:
+
+| Cover | Source | What the band does to it |
+|---|---|---|
+| Old MacDonald Had a Farm | traditional | a hoedown; Greg sings the goat verse, the penguins honk theirs |
+| Ode to Joy | Beethoven, 1824 | a disco edit with new (silly) English lyrics |
+| In the Hall of the Mountain King | Grieg, 1875 | instrumental accelerando, 96 → 186 BPM, Octavia drum solo |
+| Twinkle Twinkle Little Star | traditional (1806 poem) | an arena power-ballad with lighters |
+
+These are all public domain. Modern famous songs are copyrighted, so they are
+not bundled — to have the band play along to one you own, use **Your track →
+Make it tonight's headliner** (the file stays in your browser).
+
+All other melodies, lyrics and progressions are original. Every song runs 1:40–2:05.
 
 ## Things to do
 
@@ -216,6 +229,8 @@ skeletal-style limbs (`arm()` = shoulder angle + elbow angle).
      ],
    };
    ```
+
+   Sections can also change tempo with `bpm: 140` (see the Mountain King cover).
 
    Melodies use mini-notation: `NOTE:duration-in-16ths`, `_` for rests. Each
    vocal line starts on a bar line; syllables in `words` (split on spaces and

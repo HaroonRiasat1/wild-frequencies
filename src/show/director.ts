@@ -8,7 +8,7 @@ import { songPlayer } from '../audio/songPlayer';
 import { analyzeTrack, type TrackMap } from '../audio/trackAnalysis';
 import { trackPlayer } from '../audio/trackPlayer';
 import { conductor } from '../conductor/conductor';
-import { BANTER, ENCORE, getCompiled, OPENER, SETLIST } from '../songs';
+import { BANTER, COVERS, ENCORE, getCompiled, OPENER, SETLIST } from '../songs';
 import type { Song } from '../songs/types';
 import { clearHeadliner, loadHeadliner, saveHeadliner } from '../state/headliner';
 import { useShow } from '../state/store';
@@ -104,7 +104,7 @@ function playTrack(file: File, id: number, phase: 'playing' | 'upload'): Promise
 function peekNext(): Song | 'headliner' | null {
   const s = S();
   if (s.requested === 'headliner' && headlinerFile && !s.played.includes('headliner')) return 'headliner';
-  const req = s.requested && !s.played.includes(s.requested) ? SETLIST.find((x) => x.id === s.requested) : null;
+  const req = s.requested && !s.played.includes(s.requested) ? [...SETLIST, ...COVERS].find((x) => x.id === s.requested) : null;
   if (req) return req;
   if (headlinerFile && !s.played.includes('headliner')) return 'headliner';
   return SETLIST.find((x) => !s.played.includes(x.id)) ?? null;

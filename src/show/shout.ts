@@ -2,7 +2,7 @@
 
 import { engine } from '../audio/engine';
 import { conductor } from '../conductor/conductor';
-import { SETLIST } from '../songs';
+import { COVERS, SETLIST } from '../songs';
 import { useShow } from '../state/store';
 import { catSays, director } from './director';
 import { unlock } from './score';
@@ -28,8 +28,8 @@ export function shout(raw: string): string {
   unlock('shout', 25);
   let reply: string;
 
-  const song = SETLIST.find((x) =>
-    norm(x.title).split(' ').filter((w) => w.length > 3 && !['love', 'with', 'from', 'that'].includes(w)).some((w) => t.includes(w)),
+  const song = [...SETLIST, ...COVERS].find((x) =>
+    norm(x.title).split(' ').filter((w) => w.length > 3 && !['love', 'with', 'from', 'that', 'band', 'version', 'edit', 'arena', 'little', 'hall', 'had'].includes(w)).some((w) => t.includes(w)),
   );
   if (song) {
     if (s.played.includes(song.id)) reply = `We already played "${song.title}". Were you in the bathroom?`;

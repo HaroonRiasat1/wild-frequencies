@@ -261,6 +261,6 @@ export function compileSong(song: Song): CompiledSong {
     sections,
     lines,
     barChords,
-    durationSec: (totalSteps / 4) * (60 / song.bpm),
+    durationSec: song.sections.reduce((a, s) => a + s.bars * 4 * (60 / (s.bpm ?? song.bpm)), 0),
   };
 }

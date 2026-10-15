@@ -61,6 +61,8 @@ export interface Section {
   led?: LedMode;
   /** 0..1 — drives crowd energy, camera, particle density. */
   intensity: number;
+  /** Change tempo at the start of this section (accelerandos!). */
+  bpm?: number;
 }
 
 export interface Song {

@@ -230,3 +230,5 @@ kbd { background: rgba(255,255,255,0.12); border: 1px solid var(--line); border-
   .subtitles { bottom: 200px; }
   .clip-ready { bottom: 260px; }
 }
+
+.paper .covers-head { font-family: var(--hand); font-size: 20px; color: #7b2cff; margin: 14px 0 0; transform: rotate(-1deg); }

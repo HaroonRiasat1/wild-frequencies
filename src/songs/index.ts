@@ -1,4 +1,5 @@
 import { compileSong, type CompiledSong } from './compile';
+import { COVERS } from './covers';
 import { eightArms } from './eightArms';
 import { fogMachineHeart } from './fogMachineHeart';
 import { hibernation } from './hibernation';
@@ -14,7 +15,9 @@ export const SETLIST: Song[] = [moonlitStatic, velvetClaws, eightArms, fogMachin
 export const ENCORE: Song = lastCall;
 /** The opening act's one (1) song. */
 export const OPENER: Song = squeakEasy;
-export const ALL_SONGS: Song[] = [...SETLIST, ENCORE, OPENER];
+/** Famous (public-domain) songs, played on request. */
+export { COVERS };
+export const ALL_SONGS: Song[] = [...SETLIST, ENCORE, OPENER, ...COVERS];
 
 const cache = new Map<string, CompiledSong>();
 export function getCompiled(id: string): CompiledSong {
@@ -66,6 +69,10 @@ export const BANTER: Record<string, string[]> = {
     'Thank you! We did not write that one. We did, however, play it.',
     'Gary would like it noted that he knew every note. He did not.',
   ],
+  'old-macdonald': ['Greg would like to thank his agent, Old MacDonald.', 'E-I-E-I-thank you.'],
+  'ode-to-joy': ['That was Beethoven. He could not hear it. Lucky him.', '(that is a joke, we love Ludwig)'],
+  'mountain-king': ['Somebody get Octavia a glass of water.', 'And a new drum kit. And a nap.'],
+  twinkle: ['That one was for the moon.', 'The moon says thank you. The moon is crying again.'],
   goodnight: [
     'Thank you, goodnight!!',
     '(we are definitely not hiding behind the amps)',

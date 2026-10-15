@@ -37,17 +37,24 @@ class SongPlayer {
     engine.setPadBrightness(song.song.sound?.padBrightness ?? 0.6);
 
     let step = 0;
-    const s16 = 60 / song.song.bpm / 4;
     transport.scheduleRepeat((time) => {
-      if (step < song.totalSteps) this.playStep(song, step, time, s16);
+      if (step < song.totalSteps) {
+        // sections may change tempo; read the live tempo so note lengths follow
+        const sec = song.sections.find((x) => x.start === step);
+        if (sec?.section.bpm) {
+          transport.bpm.setValueAtTime(sec.section.bpm, time);
+          const bpm = sec.section.bpm;
+          Tone.getDraw().schedule(() => (conductor.state.bpm = bpm), time);
+        }
+        this.playStep(song, step, time, 60 / transport.bpm.getValueAtTime(time) / 4);
+      }
       step++;
     }, '16n', 0);
 
-    // one extra bar of ring-out, then tell the director
-    const endTime = (song.totalSteps + 16) * s16;
+    // one extra bar of ring-out, then tell the director (in ticks, so tempo changes are fine)
     transport.scheduleOnce((time) => {
       Tone.getDraw().schedule(() => this.finish(), time);
-    }, endTime);
+    }, `${(song.totalSteps + 16) * (transport.PPQ / 4)}i`);
 
     Tone.getDraw().schedule(() => conductor.emit('songStart', { song: song.song }), Tone.now());
     transport.start('+0.1');
