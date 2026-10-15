@@ -139,6 +139,10 @@ kbd { background: rgba(255,255,255,0.12); border: 1px solid var(--line); border-
 .cheer { padding: 12px 22px; border-radius: 999px; border: 3px solid #fff; background: linear-gradient(135deg, #ff7a1a, var(--pink)); font-family: var(--display); font-size: 18px; user-select: none; -webkit-user-select: none; touch-action: none; }
 .cheer small { font-family: var(--ui); font-size: 11px; opacity: 0.8; }
 .cheer.on { transform: scale(1.08) rotate(-2deg); box-shadow: 0 0 30px var(--pink); }
+.fun-row { display: flex; gap: 6px; }
+.tool.fun { font-size: 18px; }
+.tool.fun:active { transform: scale(0.92); }
+@media (max-width: 1000px) { .tool.fun .tool-label { display: none; } }
 .lighter-btn.glow { border-color: var(--yellow); box-shadow: 0 0 20px rgba(255, 224, 102, 0.6); }
 
 /* credits */

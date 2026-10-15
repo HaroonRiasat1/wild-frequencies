@@ -77,6 +77,12 @@ export function Hud() {
       <footer className="bottombar">
         <HypeMeter />
         <CheerButton />
+        <div className="fun-row" aria-label="Crowd fun">
+          <FunButton icon="👏" label="Clap" k="H" onPress={() => stageRef.current?.concert.clap()} />
+          <FunButton icon="🌊" label="Wave" k="W" onPress={() => stageRef.current?.concert.wave()} />
+          <FunButton icon="🏐" label="Ball" k="J" onPress={() => stageRef.current?.concert.beachBall()} />
+          <FunButton icon="👕" label="Shirt" k="G" onPress={() => stageRef.current?.concert.shirtCannon()} />
+        </div>
         <button
           className={`lighter-btn ${balladNow ? 'glow' : ''}`}
           onClick={() => {
@@ -112,6 +118,25 @@ function ToolButton({ panel, icon, label, k }: { panel: Exclude<Panel, null>; ic
   const toggle = useShow((s) => s.togglePanel);
   return (
     <button className={`tool ${active ? 'active' : ''}`} onClick={() => toggle(panel)} aria-pressed={active} title={`${label} (${k})`}>
+      {icon}
+      <span className="tool-label">{label}</span>
+    </button>
+  );
+}
+
+function FunButton({ icon, label, k, onPress }: { icon: string; label: string; k: string; onPress: () => void }) {
+  return (
+    <button
+      className="tool fun"
+      // pointerdown, not click: claps have to land on the beat
+      onPointerDown={(e) => {
+        e.preventDefault();
+        onPress();
+      }}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onPress())}
+      title={`${label} (${k})`}
+      aria-label={`${label} (${k})`}
+    >
       {icon}
       <span className="tool-label">{label}</span>
     </button>

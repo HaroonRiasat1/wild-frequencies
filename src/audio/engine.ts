@@ -424,6 +424,39 @@ class Engine {
     this.boom.triggerAttackRelease('A0', '2n', Tone.now() + 0.01, 1);
   }
 
+  /** A crowd clapping together on a beat (a smear of a few dozen hands). */
+  crowdClap(time: number) {
+    if (!this.ready) return;
+    for (let i = 0; i < 7; i++) {
+      const tt = Math.max(time + i * 0.005 + Math.random() * 0.004, this.applauseLast + 0.002);
+      this.applauseLast = tt;
+      this.applause.triggerAttackRelease('64n', tt, 0.5 + Math.random() * 0.5);
+    }
+  }
+
+  /** You, clapping. Played immediately (no look-ahead) so it feels instant. */
+  userClap() {
+    if (!this.ready) return;
+    this.drum('clap', Tone.immediate() + 0.005, 0.9);
+  }
+
+  /** Greg's T-shirt cannon: a deep "fwoomp". */
+  cannon() {
+    if (!this.ready) return;
+    this.boom.triggerAttackRelease('E1', '8n', Tone.now() + 0.01, 0.8);
+    this.cheerStart();
+    Tone.getContext().setTimeout(() => this.cheerStop(), 0.8);
+  }
+
+  /** A guitar string snapping: a bright pluck that sags out of tune. */
+  stringSnap() {
+    if (!this.ready) return;
+    const t = Tone.now() + 0.01;
+    this.guitarLead.triggerAttackRelease(660, 0.6, t, 1);
+    this.guitarLead.frequency.setValueAtTime(660, t + 0.02);
+    this.guitarLead.frequency.exponentialRampToValueAtTime(140, t + 0.55);
+  }
+
   // ------------------------------------------------------------------ upload mode
 
   async playUpload(file: File, onEnded: () => void): Promise<number> {

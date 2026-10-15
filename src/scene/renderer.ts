@@ -22,6 +22,7 @@ import { Owl } from './characters/owl';
 import { Penguins } from './characters/penguins';
 import { Roadie } from './characters/roadie';
 import { Sloth } from './characters/sloth';
+import { Concert } from './concert';
 import { Crowd } from './crowd';
 import { Fog, Particles } from './effects';
 import { LedWall } from './ledWall';
@@ -63,6 +64,7 @@ export class StageRenderer {
   private fog: Fog;
   private particles: Particles;
   crowd: Crowd;
+  concert: Concert;
   private lastPhase = '';
   private lastMicNote: string | null = null;
 
@@ -73,6 +75,7 @@ export class StageRenderer {
     this.fog = new Fog(lq);
     this.particles = new Particles(lq);
     this.crowd = new Crowd(lq);
+    this.concert = new Concert(this.crowd, this.fox, this.goat, this.roadie);
     this.band = { cat: this.cat, fox: this.fox, sloth: this.sloth, octopus: this.octopus, owl: this.owl, penguins: this.penguins, goat: this.goat };
     this.drawOrder = [this.octopus, this.owl, this.penguins, this.fox, this.sloth, this.cat];
     this.hitOrder = [this.goat, this.cat, this.sloth, this.fox, this.penguins, this.owl, this.octopus];
@@ -120,7 +123,7 @@ export class StageRenderer {
         this.fog.density = sec.lights.fog ?? 0.5;
         S().set({ sectionKind: sec.kind, sectionLabel: sec.label ?? sec.kind.toUpperCase(), soloist: section.soloist });
         if (sec.kind === 'chorus' || sec.kind === 'drop') this.owl.spin();
-        if (sec.kind === 'drop' || (sec.kind === 'chorus' && sec.intensity >= 1)) this.crowd.surfFrog();
+        if (sec.kind === 'drop' || (sec.kind === 'chorus' && sec.intensity >= 1)) this.crowd.surf();
         this.crowd.balladMode(!!song.ballad && sec.kind !== 'intro');
         if (section.soloist) {
           const c = this.band[section.soloist];
@@ -197,6 +200,7 @@ export class StageRenderer {
       return;
     }
     const [cx, cy] = this.toLayer(clientX, clientY, 0.5);
+    if (S.phase !== 'landing' && this.concert.click(cx, cy)) return;
     if (cy > 650 && S.phase !== 'landing') {
       if (this.crowd.raiseLighter(cx, cy)) S.set({ lighters: S.lighters + 1 });
     }
@@ -248,6 +252,7 @@ export class StageRenderer {
   stop() {
     cancelAnimationFrame(this.raf);
     this.unsubs.forEach((u) => u());
+    this.concert.dispose();
   }
 
   private frameCache: Frame;
@@ -294,6 +299,7 @@ export class StageRenderer {
       if (S.phase === 'walkOn' || S.phase === 'upload') this.roadie.exit();
       if (S.phase === 'landing') Object.values(this.band).forEach((c) => c.setOnStage(false));
       if (S.phase === 'upload') Object.values(this.band).forEach((c) => c.snapHome());
+      if (S.phase === 'fakeEnding') this.crowd.balladMode(true); // phone torches up for the encore chant
       this.lastPhase = S.phase;
     }
 
@@ -329,6 +335,7 @@ export class StageRenderer {
     this.roadie.update(f);
     const armsUp = f.playing ? (f.section === 'chorus' || f.section === 'drop' || f.section === 'solo' ? 1 : f.hype > 0.6 ? 0.8 : 0) : S.cheering ? 1 : 0;
     this.crowd.update(f, Math.max(armsUp, S.cheering ? 1 : 0));
+    this.concert.update(f);
 
     // camera
     let zoom = 1;
@@ -387,6 +394,7 @@ export class StageRenderer {
     // stage
     this.layer(1, f);
     this.led.draw(g, f);
+    this.concert.drawCrowdCam(g, f);
     this.set.drawBack(g, f);
     for (const c of this.drawOrder) c.draw(g, f);
     this.roadie.draw(g);
@@ -400,6 +408,7 @@ export class StageRenderer {
     this.layer(0.5, f);
     this.sky.drawFireflies(g, f);
     this.crowd.draw(g, f);
+    this.concert.draw(g, f);
 
     // screen-space overlays
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);

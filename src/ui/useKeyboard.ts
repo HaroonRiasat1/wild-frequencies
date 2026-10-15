@@ -45,6 +45,10 @@ export function useKeyboard() {
         case 't': return s.set({ translate: !s.translate });
         case 'c': return s.set({ captions: !s.captions });
         case 'n': return director.skip();
+        case 'h': return stageRef.current?.concert.clap();
+        case 'w': return stageRef.current?.concert.wave();
+        case 'j': return stageRef.current?.concert.beachBall();
+        case 'g': return stageRef.current?.concert.shirtCannon();
         case 'l': {
           const st = stageRef.current;
           const fan = st?.crowd.fans[Math.floor(Math.random() * st.crowd.fans.length)];

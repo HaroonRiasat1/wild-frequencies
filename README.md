@@ -55,6 +55,10 @@ All melodies, lyrics and progressions are original. Every song runs 1:40–2:05.
 | **Your track** (U) | drop an MP3/WAV you have the rights to → **Make it tonight's headliner** (opens the set, remembered in this browser) or **Play it right now**. The band plays along locked to its beats |
 | **Lighter** (L) or tap the crowd | raise a lighter (essential during the ballad) |
 | **Translate** (T) | swap meow subtitles for the human lyrics |
+| **Clap** (H) on the beat | rated PERFECT / good / off-beat; 8 in a row and the whole crowd claps along on 2 & 4 |
+| **Wave** (W) | a Mexican wave rolls through the crowd (it also happens by itself on big choruses) |
+| **Ball** (J), then click it | beach balls bounce over the crowd; click to BONK them back up |
+| **Shirt** (G) | Greg fires the T-shirt cannon — sometimes *you* catch one and wear it |
 | Click the moon 5× | the moon joins on tambourine |
 | ↑ ↑ ↓ ↓ ← → ← → B A | tiny sunglasses for everyone (including the crowd, the frog and you) |
 
@@ -62,6 +66,22 @@ Accessibility: **Reduce motion**, **Strobe** (off by default, warned on the
 landing page), captions always available (C), keyboard controls for
 everything, volume (+/−). Phones in landscape get a simplified stage with fewer
 particles and less fog.
+
+### Real-gig moments (they just happen)
+
+- Fans hold cardboard signs ("MARRY ME GARY", "KEVIN STAND UP"…), glow sticks
+  come out on the big sections, phone cameras flash on drops, and phone
+  torches go up during the encore chant.
+- Crowd surfers on drops: usually the frog, sometimes a hedgehog
+  ("ouch ouch ouch"), occasionally an entire bear.
+- The **crowd cam** takes over the LED wall — sometimes it finds you.
+- After each song Rusty flicks a pick and Octavia launches a drumstick into
+  the pit; the hype goat fires shirts on drops.
+- Once per show Rusty breaks a string mid-verse; the roadie sprints on with a
+  spare guitar.
+
+These all live in `scene/concert.ts` and react to the same conductor events,
+so they work on your headliner track too.
 
 ## How it works
 

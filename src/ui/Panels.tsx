@@ -252,6 +252,7 @@ export function SettingsPanel() {
         <li><kbd>1</kbd>–<kbd>7</kbd> poke a band member</li>
         <li><kbd>S</kbd> setlist · <kbd>M</kbd> mixer · <kbd>V</kbd> sing · <kbd>U</kbd> upload · <kbd>O</kbd> settings</li>
         <li><kbd>T</kbd> translate · <kbd>C</kbd> captions · <kbd>L</kbd> lighter · <kbd>N</kbd> skip song</li>
+        <li><kbd>H</kbd> clap on the beat · <kbd>W</kbd> Mexican wave · <kbd>J</kbd> beach ball · <kbd>G</kbd> T-shirt cannon</li>
         <li><kbd>+</kbd>/<kbd>-</kbd> volume · <kbd>Esc</kbd> close panel</li>
       </ul>
     </div>

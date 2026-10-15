@@ -21,6 +21,18 @@ export class Roadie {
     this.target = 1800;
   }
 
+  private errandHold = 0;
+  private carrying = false;
+
+  /** Sprint on from stage right with a spare guitar, hand it over, sprint off. */
+  errand(x: number) {
+    if (!this.visible) this.x = 1800;
+    this.visible = true;
+    this.target = x + 70;
+    this.errandHold = 1.4;
+    this.carrying = true;
+  }
+
   say(text: string, seconds = 2) {
     this.bubbleText = text;
     this.bubbleT = seconds;
@@ -30,8 +42,16 @@ export class Roadie {
     this.t += f.dt;
     this.bubbleT = Math.max(0, this.bubbleT - f.dt);
     const d = this.target - this.x;
-    this.x += Math.sign(d) * Math.min(Math.abs(d), (this.target > 900 ? 700 : 380) * f.dt);
-    if (this.x >= 1790) this.visible = false;
+    this.x += Math.sign(d) * Math.min(Math.abs(d), (this.target > 900 || this.carrying ? 700 : 380) * f.dt);
+    if (this.carrying && Math.abs(this.target - this.x) < 2) {
+      this.errandHold -= f.dt;
+      if (this.errandHold <= 0) {
+        this.carrying = false;
+        this.say('you\'re welcome', 1.2);
+        this.exit();
+      }
+    }
+    if (this.x >= 1790 && this.target >= 1800) this.visible = false;
   }
 
   draw(g: G) {
@@ -63,7 +83,11 @@ export class Roadie {
     ell(g, 0, -110, 20, 8, '#ff2e63');
     rr(g, -24, -110, 14, 5, 2, '#ff2e63');
     // mic (or, when leaving, a stolen slice of pizza)
-    if (running && this.target > 900) poly(g, [18, -60, 40, -66, 30, -44], '#ffc94a');
+    if (this.carrying) {
+      // the spare guitar, held overhead like a trophy
+      limb(g, -20, -96, 30, -150, 5, '#d9b27c');
+      ell(g, -24, -92, 18, 13, '#2bf1ff');
+    } else if (running && this.target > 900) poly(g, [18, -60, 40, -66, 30, -44], '#ffc94a');
     else {
       limb(g, 18, -60, 22, -84, 6, '#5a5463');
       ell(g, 22, -90, 5, 7, '#333');
