@@ -30,9 +30,9 @@ export function tickHype(dt: number) {
   if (s.phase === 'landing' || party.isGuest) return; // guests get the host's hype
   if (Math.abs(s.hype - level) > 0.02) level = s.hype; // reset from outside (play again)
   let h = level;
-  if (s.cheering) h += dt * 0.2;
   // every friend holding cheer adds to the host's meter
-  if (party.isHost) h += dt * 0.12 * party.cheering.size;
+  const friends = party.isHost ? party.cheering.size : 0;
+  if (s.cheering || friends) h += dt * ((s.cheering ? 0.2 : 0) + 0.12 * friends);
   else h -= dt * (s.phase === 'fakeEnding' ? 0.015 : 0.035);
   // the music itself gets the crowd going a bit
   h += dt * conductor.state.intensity * 0.012;
