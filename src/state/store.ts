@@ -16,7 +16,25 @@ export type Phase =
   | 'afterparty';
 
 export type MicAnimal = 'cat' | 'goat' | 'penguin' | 'wolf';
-export type Panel = 'mixer' | 'setlist' | 'mic' | 'upload' | 'settings' | 'merch' | 'shout' | 'lights' | 'remix' | 'score' | null;
+export type Panel = 'mixer' | 'setlist' | 'mic' | 'upload' | 'settings' | 'merch' | 'shout' | 'lights' | 'remix' | 'score' | 'party' | null;
+
+export type FanAnimal = 'raccoon' | 'deer' | 'hedgehog' | 'bear';
+export interface Member {
+  id: string;
+  name: string;
+  animal: FanAnimal;
+  color: string;
+  role: 'host' | 'guest';
+}
+export interface PartyState {
+  role: 'off' | 'host' | 'guest';
+  status: 'idle' | 'connecting' | 'live' | 'error' | 'ended';
+  message: string;
+  room: string | null;
+  me: string | null;
+  members: Member[];
+  urls: string[];
+}
 
 export type Movement = 'still' | 'sweep' | 'chase' | 'pulse' | 'strobe';
 export interface LightOverride {
@@ -137,6 +155,7 @@ interface State {
   raining: boolean;
   clip: { recording: boolean; url: string | null; seconds: number };
   stageDive: 'none' | 'climbing' | 'stage' | 'surfing';
+  party: PartyState;
 
   set: (p: Partial<State>) => void;
   toggleMute: (id: InstrumentId) => void;
@@ -203,6 +222,7 @@ export const useShow = create<State>((set, get) => ({
   raining: false,
   clip: { recording: false, url: null, seconds: 0 },
   stageDive: 'none',
+  party: { role: 'off', status: 'idle', message: '', room: null, me: null, members: [], urls: [] },
 
   set: (p) => set(p),
   toggleMute: (id) => set({ muted: { ...get().muted, [id]: !get().muted[id] } }),

@@ -10,6 +10,7 @@ import { trackPlayer } from '../audio/trackPlayer';
 import { conductor } from '../conductor/conductor';
 import { CAST } from '../show/cast';
 import { tickHype } from '../show/hype';
+import { party } from '../party/party';
 import { addScore, unlock } from '../show/score';
 import type { CharacterId, LightCue } from '../songs/types';
 import { CHARACTER_TO_INSTRUMENT, isAudible, useShow } from '../state/store';
@@ -186,7 +187,7 @@ export class StageRenderer {
 
   // ------------------------------------------------------------------ interaction
 
-  poke(id: CharacterId) {
+  poke(id: CharacterId, remote = false) {
     const c = this.band[id];
     if (c.anim === 'offstage' || c.walking) return;
     const n = (this.pokeCount[id] = (this.pokeCount[id] ?? 0) + 1);
@@ -194,7 +195,7 @@ export class StageRenderer {
     c.poke(lines[(n - 1) % lines.length]);
     if (id === 'goat') this.goat.scream();
     engine.lick(id);
-    conductor.emit('react', { who: id, kind: 'poke' });
+    conductor.emit('react', { who: id, kind: remote ? 'remotePoke' : 'poke' });
   }
 
   private toLayer(clientX: number, clientY: number, p: number): [number, number] {
@@ -398,7 +399,13 @@ export class StageRenderer {
       if (this.lastDive === 'surfing') this.cat.say('…and it\'s gone.', 2);
     }
 
-    if (trackPlayer.active) this.cat.mouthAlong(conductor.state.vocal);
+    if (trackPlayer.active || party.followingTrack) this.cat.mouthAlong(conductor.state.vocal);
+
+    // party: friends in the crowd
+    party.tick(f.dt);
+    const me = S.party.me;
+    this.crowd.friends = S.party.status === 'live' ? S.party.members.filter((m) => m.id !== me).map((m) => ({ ...m, fx: party.friendFx.get(m.id) })) : [];
+    this.crowd.youFx = me ? party.friendFx.get(me) : undefined;
 
     // update everyone
     for (const c of Object.values(this.band)) {

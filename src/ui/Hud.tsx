@@ -8,6 +8,7 @@ import { ALL_SONGS } from '../songs';
 import { useShow, type Panel } from '../state/store';
 import { clipExtension, clipSupported, recordClip } from './clip';
 import { LightsPanel, MerchPanel, RemixPanel, ScorePanel, ShoutPanel } from './ExtraPanels';
+import { EmoteBar, PartyPanel } from './PartyPanel';
 import { MicPanel, Mixer, SettingsPanel, Setlist, UploadPanel } from './Panels';
 
 const HYPE_LABELS = ['mild interest', 'polite clapping', 'woo!', 'WOOOO!!', 'absolute scenes', 'ENCORE ENERGY'];
@@ -19,6 +20,7 @@ export function Hud() {
     ? { title: s.headliner?.name ?? s.uploadName?.replace(/\.[^.]+$/, '') ?? 'Your track', bpm: Math.round(s.trackBpm), key: s.detectedKey ? `${s.detectedKey} (detected)` : 'your track', ballad: false }
     : undefined);
   const balladNow = !!song?.ballad;
+  const guest = s.party.role === 'guest' && s.party.status === 'live';
 
   return (
     <div className="hud">
@@ -41,10 +43,11 @@ export function Hud() {
           <ToolButton panel="setlist" icon="📝" label="Setlist" k="S" />
           <ToolButton panel="mixer" icon="🎚️" label="Mixer" k="M" />
           <ToolButton panel="mic" icon="🎤" label="Sing" k="V" />
-          <ToolButton panel="upload" icon="💿" label="Your track" k="U" />
+          <ToolButton panel="party" icon="🎉" label={s.party.status === 'live' ? `Party (${s.party.members.length})` : 'Party'} k="P" />
+          {!guest && <ToolButton panel="upload" icon="💿" label="Your track" k="U" />}
           <ToolButton panel="shout" icon="📣" label="Shout" k="Y" />
-          <ToolButton panel="lights" icon="💡" label="Lights" k="X" />
-          <ToolButton panel="remix" icon="🎛️" label="Remix" k="R" />
+          {!guest && <ToolButton panel="lights" icon="💡" label="Lights" k="X" />}
+          {!guest && <ToolButton panel="remix" icon="🎛️" label="Remix" k="R" />}
           <ToolButton panel="merch" icon="🛍️" label="Merch" k="B" />
           {clipSupported() && (
             <button className={`tool ${s.clip.recording ? 'active rec' : ''}`} onClick={recordClip} disabled={s.clip.recording} title="Record a 10-second clip (K)">
@@ -52,12 +55,12 @@ export function Hud() {
             </button>
           )}
           <ToolButton panel="settings" icon="⚙️" label="Settings" k="O" />
-          {s.phase === 'afterparty' && (
+          {s.phase === 'afterparty' && !guest && (
             <button className="tool" onClick={() => director.leaveAfterparty()}>
               🚪<span className="tool-label">Leave the party</span>
             </button>
           )}
-          {(s.phase === 'playing' || s.phase === 'encore' || (s.phase === 'upload' && s.songId)) && (
+          {!guest && (s.phase === 'playing' || s.phase === 'encore' || (s.phase === 'upload' && s.songId)) && (
             <button className="tool" onClick={() => director.skip()} title="Skip to the end of this song">
               ⏭<span className="tool-label">Skip</span>
             </button>
@@ -91,6 +94,7 @@ export function Hud() {
             {s.panel === 'lights' && <LightsPanel />}
             {s.panel === 'remix' && <RemixPanel />}
             {s.panel === 'score' && <ScorePanel />}
+            {s.panel === 'party' && <PartyPanel />}
           </motion.aside>
         )}
       </AnimatePresence>
@@ -98,6 +102,7 @@ export function Hud() {
       <NameCard />
       <Subtitles />
       <Toasts />
+      <EmoteBar />
       {s.clip.url && !s.clip.recording && (
         <div className="clip-ready">
           🎥 Clip ready —{' '}

@@ -31,13 +31,15 @@ class Engine {
   private kick!: Tone.MembraneSynth;
   private snare!: Tone.NoiseSynth;
   private snareBody!: Tone.MembraneSynth;
-  private hat!: Tone.MetalSynth;
-  private openHat!: Tone.MetalSynth;
+  // cymbals are filtered noise: MetalSynth's FM banks run constantly and cost
+  // more CPU than the whole rest of the band
+  private hat!: Tone.NoiseSynth;
+  private openHat!: Tone.NoiseSynth;
   private clap!: Tone.NoiseSynth;
   private tomHi!: Tone.MembraneSynth;
   private tomLo!: Tone.MembraneSynth;
-  private crash!: Tone.MetalSynth;
-  private ride!: Tone.MetalSynth;
+  private crash!: Tone.NoiseSynth;
+  private ride!: Tone.NoiseSynth;
   private tamb!: Tone.NoiseSynth;
 
   // melodic
@@ -59,6 +61,9 @@ class Engine {
 
   // crowd
   private roar!: Tone.Noise;
+  private murmurNoise!: Tone.Noise;
+  private roarOffTimer = 0;
+  private murmurOffTimer = 0;
   private roarGain!: Tone.Gain;
   private roarFilter!: Tone.Filter;
   private murmurGain!: Tone.Gain;
@@ -100,7 +105,7 @@ class Engine {
     limiter.connect(this.meter);
 
     // ---- FX rack: big reverb + wobbly tape delay
-    this.reverb = new Tone.Reverb({ decay: 5.5, preDelay: 0.03, wet: 1 }).connect(this.master);
+    this.reverb = new Tone.Reverb({ decay: 3.4, preDelay: 0.03, wet: 1 }).connect(this.master);
     this.reverbSend = new Tone.Gain(1).connect(this.reverb);
     const tapeTone = new Tone.Filter({ type: 'lowpass', frequency: 2800 }).connect(this.master);
     this.delay = new Tone.FeedbackDelay({ delayTime: '8n.', feedback: 0.38, wet: 1 }).connect(tapeTone);
@@ -144,19 +149,13 @@ class Engine {
     this.snare = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 }, volume: -5 }).connect(snareTone);
     const clapTone = new Tone.Filter({ type: 'bandpass', frequency: 1400, Q: 0.8 }).connect(crunch);
     this.clap = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.004, decay: 0.14, sustain: 0 }, volume: -2 }).connect(clapTone);
-    const hatTone = new Tone.Filter({ type: 'highpass', frequency: 7000 }).connect(bus);
-    this.hat = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.05, release: 0.01 }, harmonicity: 5.1, modulationIndex: 32, resonance: 5000, octaves: 1.5, volume: -20,
-    }).connect(hatTone);
-    this.openHat = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.32, release: 0.1 }, harmonicity: 5.1, modulationIndex: 32, resonance: 5000, octaves: 1.5, volume: -24,
-    }).connect(hatTone);
-    this.ride = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.5, release: 0.2 }, harmonicity: 3.1, modulationIndex: 16, resonance: 4000, octaves: 1, volume: -26,
-    }).connect(hatTone);
-    this.crash = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 1.4, release: 0.6 }, harmonicity: 5.1, modulationIndex: 40, resonance: 3500, octaves: 2, volume: -22,
-    }).connect(bus);
+    const hatTone = new Tone.Filter({ type: 'highpass', frequency: 7500, Q: 0.8 }).connect(bus);
+    this.hat = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.045, sustain: 0 }, volume: -15 }).connect(hatTone);
+    this.openHat = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.3, sustain: 0 }, volume: -19 }).connect(hatTone);
+    const rideTone = new Tone.Filter({ type: 'bandpass', frequency: 6200, Q: 1.6 }).connect(bus);
+    this.ride = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.45, sustain: 0 }, volume: -16 }).connect(rideTone);
+    const crashTone = new Tone.Filter({ type: 'highpass', frequency: 3800 }).connect(bus);
+    this.crash = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 1.3, sustain: 0 }, volume: -15 }).connect(crashTone);
     this.tomHi = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 3, envelope: { attack: 0.001, decay: 0.3, sustain: 0 }, volume: -4 }).connect(crunch);
     this.tomLo = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 3, envelope: { attack: 0.001, decay: 0.4, sustain: 0 }, volume: -3 }).connect(crunch);
     const tambTone = new Tone.Filter({ type: 'highpass', frequency: 6500 }).connect(this.ch.hype);
@@ -237,7 +236,7 @@ class Engine {
     this.crowdBus.connect(this.reverbSend);
     this.roarFilter = new Tone.Filter({ type: 'bandpass', frequency: 900, Q: 0.6 });
     this.roarGain = new Tone.Gain(0).connect(this.crowdBus);
-    this.roar = new Tone.Noise('pink').start();
+    this.roar = new Tone.Noise('pink');
     this.roar.chain(this.roarFilter, this.roarGain);
 
     const murmurFilter = new Tone.Filter({ type: 'lowpass', frequency: 520 });
@@ -245,8 +244,8 @@ class Engine {
     const murmurAm = new Tone.Gain(1);
     const lfo = new Tone.LFO({ frequency: 0.35, min: 0.4, max: 1 }).start();
     lfo.connect(murmurAm.gain);
-    const mnoise = new Tone.Noise('brown').start();
-    mnoise.chain(murmurFilter, murmurAm, this.murmurGain);
+    this.murmurNoise = new Tone.Noise('brown');
+    this.murmurNoise.chain(murmurFilter, murmurAm, this.murmurGain);
 
     const applauseTone = new Tone.Filter({ type: 'bandpass', frequency: 2000, Q: 0.5 }).connect(this.crowdBus);
     this.applause = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 }, volume: -12 }).connect(applauseTone);
@@ -277,10 +276,10 @@ class Engine {
         this.snareBody.triggerAttackRelease('G3', '32n', time, vel * 0.8);
         break;
       case 'clap': this.clap.triggerAttackRelease('16n', time, vel); break;
-      case 'hat': this.hat.triggerAttackRelease(320, '32n', time, vel * 0.8); break;
-      case 'openHat': this.openHat.triggerAttackRelease(320, '8n', time, vel * 0.8); break;
-      case 'ride': this.ride.triggerAttackRelease(420, '8n', time, vel * 0.7); break;
-      case 'crash': this.crash.triggerAttackRelease(250, '2n', time, vel); break;
+      case 'hat': this.hat.triggerAttackRelease('32n', time, vel * 0.8); break;
+      case 'openHat': this.openHat.triggerAttackRelease('8n', time, vel * 0.8); break;
+      case 'ride': this.ride.triggerAttackRelease('8n', time, vel * 0.7); break;
+      case 'crash': this.crash.triggerAttackRelease('2n', time, vel); break;
       case 'tomHi': this.tomHi.triggerAttackRelease('A2', '8n', time, vel); break;
       case 'tomLo': this.tomLo.triggerAttackRelease('E2', '8n', time, vel); break;
     }
@@ -364,11 +363,16 @@ class Engine {
 
   murmur(on: boolean) {
     if (!this.ready) return;
+    window.clearTimeout(this.murmurOffTimer);
+    if (on && this.murmurNoise.state !== 'started') this.murmurNoise.start();
     this.murmurGain.gain.rampTo(on ? 0.12 : 0, on ? 1.5 : 2);
+    if (!on) this.murmurOffTimer = window.setTimeout(() => this.murmurNoise.state === 'started' && this.murmurNoise.stop(), 2600);
   }
 
   cheerStart() {
     if (!this.ready) return;
+    window.clearTimeout(this.roarOffTimer);
+    if (this.roar.state !== 'started') this.roar.start();
     const now = Tone.now();
     this.roarGain.gain.cancelScheduledValues(now);
     this.roarGain.gain.linearRampToValueAtTime(0.55, now + 0.25);
@@ -386,6 +390,7 @@ class Engine {
     this.roarGain.gain.setValueAtTime(this.roarGain.gain.value, now);
     this.roarGain.gain.linearRampToValueAtTime(0, now + 1.4);
     this.roarFilter.frequency.rampTo(900, 1);
+    this.roarOffTimer = window.setTimeout(() => this.roar.state === 'started' && this.roar.stop(), 1700);
   }
 
   applaud(seconds = 3, density = 60) {

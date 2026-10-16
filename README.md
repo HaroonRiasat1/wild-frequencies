@@ -22,6 +22,40 @@ Click **🚪 Doors open** (browsers need a click before they'll play audio).
 Add `?rehearsal` to the URL to skip the mic check + walk-on (handy while
 working on songs).
 
+## 🎉 Party mode — friends join your concert
+
+```bash
+npm run party      # builds, then serves the app + party relay on port 5180
+```
+
+1. Open the address it prints (e.g. `http://192.168.0.12:5180`) on your
+   computer, click **Doors open**, then **🎉 Party → Start a party**.
+2. Friends on the **same Wi-Fi** scan the QR code (or open the link /
+   type the 4-letter code), pick a name and an animal, and tap **Join**.
+3. That's it. The band plays on every device, in sync; friends appear in the
+   front rows with name tags (and a shirt in their colour).
+
+What friends can do: **cheer** (every friend holding Cheer fills *your* hype
+meter — a loud crowd unlocks the encore), **clap**, send **emoji reactions**
+(🔥🤘😂😍👏🦆🌕🐐) that float above their head on everyone's screen, **shout**
+(the cat answers them by name), **request songs**, and **poke** band members
+(everyone sees it). The host runs the show: setlist, skip, lights, remix,
+encore and afterparty.
+
+How it stays in sync: the party server's clock is the shared clock (each
+client measures its offset by ping). When the host starts a song it
+announces *"song X starts at server time T"* about 0.8 s ahead; every device
+synthesises the band itself and starts its transport at T, compensating for
+Tone's scheduling look-ahead. Friends who join mid-song jump straight to the
+right 16th note (even across tempo changes). Measured on one machine:
+songs start within ~3 ms of each other. Show state (phase, subtitles, hype,
+rain, lights, setlist…) is sent as small patches 10× a second.
+
+Your own headliner track is **never sent** to anyone — friends see the band
+follow its beats, but the sound only comes out of your speakers. Party mode
+needs everyone on the same network; nothing goes to the internet and nothing
+is stored.
+
 ## The show
 
 1. **Landing** – dark venue, strobe/motion warnings, "Doors open".
@@ -261,6 +295,13 @@ skeletal-style limbs (`arm()` = shoulder angle + elbow angle).
    it (e.g. `conductor.on('note', …)`).
 4. Give it a lick in `engine.lick()` and, if it sings, an `AnimalVoice` preset.
 
+## Performance note
+
+Cymbals are filtered-noise synths (Tone's MetalSynth keeps big FM banks running
+all the time), the animal voices only run their oscillators while singing, and
+crowd noise only runs while you can hear it. Together that took the audio
+engine from ~0.5× real time to a solid 1.0× on a busy machine.
+
 ## Project layout
 
 ```
@@ -272,6 +313,8 @@ src/
   scene/      renderer, stage + lights, LED wall, sky, crowd, effects, characters/
   ui/         React HUD: mixer, paper setlist, mic, upload, settings, subtitles, credits
   state/      Zustand store
+  party/      party.ts (client: rooms, clock sync, relay)
+party/        server.mjs (static server + WebSocket relay for party mode)
 ```
 
 No animals were harmed. One frog was mildly surfed.

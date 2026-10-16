@@ -6,6 +6,8 @@
 import { circ, ell, eye, limb, poly, rgba, rr, sunglasses, type G } from './draw';
 import { unlock } from '../show/score';
 import type { Frame } from './characters/base';
+import type { FriendFx } from '../party/party';
+import type { Member } from '../state/store';
 
 type Kind = 'raccoon' | 'deer' | 'hedgehog' | 'bear';
 export interface Fan {
@@ -60,6 +62,10 @@ export class Crowd {
   /** Only a few VIPs stay for the afterparty. */
   vipOnly = false;
   onDiveDone: (() => void) | null = null;
+  /** Party mode: friends in the front rows, with name tags. */
+  friends: (Member & { fx?: FriendFx })[] = [];
+  youFx: FriendFx | undefined;
+  private friendFans = new Map<string, Fan>();
   private dive: { state: 'none' | 'climbing' | 'stage' | 'surfing'; t: number; x: number } = { state: 'none', t: 0, x: 800 };
   private waveX: number | null = null;
 
@@ -187,8 +193,55 @@ export class Crowd {
     const rim = f.palette[Math.floor(f.beat / 4) % Math.max(1, f.palette.length)] ?? '#7b2cff';
     const fans = this.vipOnly ? this.fans.filter((_, i) => i % 6 === 0) : this.fans;
     for (const fan of fans) this.fan(g, f, fan, this.bobFor(f, fan), rim);
+    this.drawFriends(g, f, rim);
     this.drawYou(g, f, rim);
+    if (this.youFx && this.youFx.emoteT > 0) this.emote(g, 800, 690, this.youFx.emote ?? '', this.youFx.emoteT);
     if (this.surfer) this.drawSurfer(g, f);
+  }
+
+  private drawFriends(g: G, f: Frame, rim: string) {
+    // slots alternate either side of YOU along the front of the crowd
+    const slots = [650, 950, 510, 1090, 370, 1230, 230, 1370, 580, 1020, 440, 1160];
+    this.friends.forEach((m, i) => {
+      const x = slots[i % slots.length] + Math.floor(i / slots.length) * 30;
+      const y = i < 8 ? 880 : 830;
+      let fan = this.friendFans.get(m.id);
+      if (!fan || fan.kind !== m.animal) {
+        fan = {
+          kind: m.animal, x, y, s: 1.05, ph: 0, amp: 1, arms: 0, hold: 'none', jump: 0, col: COLORS[m.animal][0],
+          sign: null, signCol: '#fff', glow: null, flash: 0, wave: 0, clap: 0, shirt: m.color,
+        };
+        this.friendFans.set(m.id, fan);
+      }
+      fan.x = x;
+      fan.y = y;
+      fan.clap = Math.max(fan.clap * 0.9, m.fx?.clap ?? 0);
+      const near = this.waveX !== null ? Math.max(0, 1 - Math.abs(this.waveX - x) / 140) : 0;
+      fan.wave = Math.max(near, fan.wave * 0.95);
+      fan.arms += ((f.playing && (f.section === 'chorus' || f.section === 'drop') ? 1 : 0) - fan.arms) * Math.min(1, f.dt * 3);
+      this.fan(g, f, fan, this.bobFor(f, fan), rim);
+      // name tag
+      const ty = y - 150 * fan.s - this.bobFor(f, fan);
+      g.font = '900 15px "Trebuchet MS", system-ui';
+      g.textAlign = 'center';
+      const w = g.measureText(m.name).width + 18;
+      rr(g, x - w / 2, ty - 16, w, 22, 11, 'rgba(10,4,30,0.85)');
+      g.strokeStyle = m.color;
+      g.lineWidth = 2;
+      g.strokeRect(x - w / 2 + 3, ty - 13, w - 6, 16);
+      g.fillStyle = m.color;
+      g.fillText(m.role === 'host' ? `★ ${m.name}` : m.name, x, ty);
+      if (m.fx && m.fx.emoteT > 0) this.emote(g, x, ty - 30, m.fx.emote ?? '', m.fx.emoteT);
+    });
+  }
+
+  private emote(g: G, x: number, y: number, emoji: string, t: number) {
+    g.save();
+    g.globalAlpha = Math.min(1, t * 2);
+    g.font = `${34 + (2.6 - t) * 6}px system-ui, "Apple Color Emoji", "Segoe UI Emoji"`;
+    g.textAlign = 'center';
+    g.fillText(emoji, x, y - (2.6 - t) * 30);
+    g.restore();
   }
 
   /** Hand height of the fan nearest x (for beach balls to bounce off). */

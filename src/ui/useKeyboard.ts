@@ -52,6 +52,7 @@ export function useKeyboard() {
         case 'y': e.preventDefault(); return s.togglePanel('shout');
         case 'x': return s.togglePanel('lights');
         case 'b': return s.togglePanel('merch');
+        case 'p': return s.togglePanel('party');
         case 'r': return s.togglePanel('remix');
         case 'k': return recordClip();
         case 'w': return stageRef.current?.concert.wave();

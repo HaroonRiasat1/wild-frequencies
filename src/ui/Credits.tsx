@@ -8,6 +8,7 @@ import { useShow } from '../state/store';
 export function Credits() {
   const { setLog, lighters, moonJoined, sunglasses, encoreUnlocked, score, achievements } = useShow();
   const [copied, setCopied] = useState(false);
+  const guest = useShow((s) => s.party.role === 'guest' && s.party.status === 'live');
 
   const share = async () => {
     const lines = [
@@ -77,8 +78,14 @@ export function Credits() {
           {!achievements.length && <small>no badges — next time, clap on the beat</small>}
         </p>
         <div className="credits-buttons">
-          <button className="big-btn alt" onClick={() => director.afterparty()}>🎉 Go to the afterparty</button>
-          <button className="big-btn" onClick={() => director.playAgain()}>🔁 Play again</button>
+          {guest ? (
+            <p className="fineprint">The host decides what happens next (afterparty? another show?).</p>
+          ) : (
+            <>
+              <button className="big-btn alt" onClick={() => director.afterparty()}>🎉 Go to the afterparty</button>
+              <button className="big-btn" onClick={() => director.playAgain()}>🔁 Play again</button>
+            </>
+          )}
           <button className="big-btn alt" onClick={share}>📤 {copied ? 'Copied!' : 'Share your set'}</button>
         </div>
       </div>

@@ -5,6 +5,7 @@
 import * as Tone from 'tone';
 import { engine } from '../audio/engine';
 import { conductor } from '../conductor/conductor';
+import { party } from '../party/party';
 import { addScore, unlock } from '../show/score';
 import { isAudible, useShow } from '../state/store';
 import type { Frame } from './characters/base';
@@ -112,6 +113,7 @@ export class Concert {
   /** H: clap. Judged against the beat; 8 in a row and the whole crowd joins in. */
   clap() {
     engine.userClap();
+    party.clap();
     this.crowd.youWave = Math.max(this.crowd.youWave, 0.3);
     const f = this.frame;
     if (!f?.playing) {

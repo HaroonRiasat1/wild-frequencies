@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { director } from '../show/director';
 import { useShow } from '../state/store';
+import { JoinCard, joinCode } from './PartyPanel';
 
 export function Landing() {
   const { strobe, reduceMotion, set } = useShow();
@@ -36,6 +37,9 @@ export function Landing() {
           </div>
         </div>
 
+        {joinCode() ? (
+          <JoinCard code={joinCode()!} />
+        ) : (
         <motion.button
           className="doors"
           onClick={open}
@@ -46,6 +50,7 @@ export function Landing() {
         >
           {opening ? 'Tuning the sloth…' : '🚪 Doors open'}
         </motion.button>
+        )}
         <p className="hint">
           Sound on (headphones recommended). Hold <kbd>Space</kbd> to cheer · click band members · try the moon.
         </p>

@@ -4,6 +4,7 @@
 import { conductor } from '../conductor/conductor';
 import { engine } from '../audio/engine';
 import { useShow } from '../state/store';
+import { party } from '../party/party';
 import { unlock } from './score';
 
 let cooldown = 0;
@@ -17,10 +18,12 @@ export function resetPeak() {
 
 export function tickHype(dt: number) {
   const s = useShow.getState();
-  if (s.phase === 'landing') return;
+  if (s.phase === 'landing' || party.isGuest) return; // guests get the host's hype
   if (Math.abs(s.hype - level) > 0.02) level = s.hype; // reset from outside (play again)
   let h = level;
   if (s.cheering) h += dt * 0.2;
+  // every friend holding cheer adds to the host's meter
+  if (party.isHost) h += dt * 0.12 * party.cheering.size;
   else h -= dt * (s.phase === 'fakeEnding' ? 0.015 : 0.035);
   // the music itself gets the crowd going a bit
   h += dt * conductor.state.intensity * 0.012;
@@ -51,6 +54,7 @@ export function cheerStart() {
   if (s.cheering || s.phase === 'landing') return;
   s.set({ cheering: true });
   engine.cheerStart();
+  party.cheer(true);
   conductor.emit('cheer', { level: s.hype });
 }
 
@@ -59,4 +63,5 @@ export function cheerStop() {
   if (!s.cheering) return;
   s.set({ cheering: false });
   engine.cheerStop();
+  party.cheer(false);
 }

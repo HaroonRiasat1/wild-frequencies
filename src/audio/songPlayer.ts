@@ -10,6 +10,20 @@ import { engine } from './engine';
 
 type Emission = { [K in keyof ConductorEvents]: [K, ConductorEvents[K]] }[keyof ConductorEvents];
 
+/** Party mode hooks: the host announces songs; guests start them at the same moment. */
+export const songHooks = {
+  /** Seconds between "play" and the downbeat (the host gives guests time to receive it). */
+  leadIn: 0.1,
+  onPlay: null as ((songId: string, startIn: number) => void) | null,
+  onStop: null as (() => void) | null,
+};
+
+export interface PlayOpts {
+  startIn?: number;
+  /** Join mid-song (late-joining guests). */
+  fromStep?: number;
+}
+
 class SongPlayer {
   current: CompiledSong | null = null;
   private onEnd: (() => void) | null = null;
@@ -22,8 +36,10 @@ class SongPlayer {
     };
   }
 
-  play(song: CompiledSong, onEnd: () => void) {
+  play(song: CompiledSong, onEnd: () => void, opts: PlayOpts = {}) {
     this.stop();
+    const startIn = opts.startIn ?? songHooks.leadIn;
+    const fromStep = Math.max(0, Math.min(song.totalSteps - 1, Math.floor(opts.fromStep ?? 0)));
     const transport = Tone.getTransport();
     transport.bpm.value = song.song.bpm;
     transport.swing = song.song.swing ?? 0;
@@ -36,7 +52,12 @@ class SongPlayer {
     conductor.state.playing = true;
     engine.setPadBrightness(song.song.sound?.padBrightness ?? 0.6);
 
-    let step = 0;
+    // joining mid-song: use whatever tempo that section is in
+    if (fromStep > 0) {
+      const tempoSec = [...song.sections].reverse().find((x) => x.start <= fromStep && x.section.bpm);
+      if (tempoSec?.section.bpm) transport.bpm.value = tempoSec.section.bpm;
+    }
+    let step = fromStep;
     transport.scheduleRepeat((time) => {
       if (step < song.totalSteps) {
         // sections may change tempo; read the live tempo so note lengths follow
@@ -57,7 +78,8 @@ class SongPlayer {
     }, `${(song.totalSteps + 16) * (transport.PPQ / 4)}i`);
 
     Tone.getDraw().schedule(() => conductor.emit('songStart', { song: song.song }), Tone.now());
-    transport.start('+0.1');
+    transport.start(Tone.now() + Math.max(0.02, startIn), fromStep ? `${fromStep * (transport.PPQ / 4)}i` : 0);
+    songHooks.onPlay?.(song.song.id, startIn);
   }
 
   private lineId = -1;
@@ -104,6 +126,7 @@ class SongPlayer {
   }
 
   stop() {
+    if (this.current) songHooks.onStop?.();
     const transport = Tone.getTransport();
     transport.stop();
     transport.cancel(0);

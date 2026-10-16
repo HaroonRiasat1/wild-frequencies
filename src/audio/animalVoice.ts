@@ -70,7 +70,17 @@ function shapeFor(syl: string): { path: [string, number][]; roll: boolean; nasal
   return { path: [['e', 0], ['a', 0.5]], roll, nasal };
 }
 
+/** Every voice, so one watchdog can put idle ones to sleep. */
+const VOICES = new Set<AnimalVoice>();
+let watchdog = 0;
+
 export class AnimalVoice {
+  // sources only run while singing: nine always-on voices (osc + noise + four
+  // filters each) were a big slice of the audio thread's budget
+  private running = false;
+  private activeUntil = 0;
+  private lastStopAt = 0;
+
   readonly output: Tone.Gain;
   preset: VoicePreset;
   kind: VoiceKind;
@@ -90,7 +100,7 @@ export class AnimalVoice {
     this.output = new Tone.Gain(this.preset.gain);
     this.amp = new Tone.Gain(0);
     this.trem = new Tone.Gain(1);
-    this.osc = new Tone.Oscillator({ type: this.preset.osc, frequency: 220 }).start();
+    this.osc = new Tone.Oscillator({ type: this.preset.osc, frequency: 220 });
 
     // vibrato & tremolo: LFOs centred on "no effect", amplitude = depth
     this.vib = new Tone.LFO({ frequency: this.preset.vibratoRate, min: -this.preset.vibratoDepth, max: this.preset.vibratoDepth }).start();
@@ -114,7 +124,7 @@ export class AnimalVoice {
     const bodyGain = new Tone.Gain(0.25);
     this.osc.chain(this.body, bodyGain, this.trem);
 
-    this.noise = new Tone.Noise('pink').start();
+    this.noise = new Tone.Noise('pink');
     this.breathGain = new Tone.Gain(0);
     const breathFilter = new Tone.Filter({ type: 'bandpass', frequency: 2500, Q: 1 });
     this.noise.chain(breathFilter, this.breathGain, this.trem);
@@ -147,7 +157,33 @@ export class AnimalVoice {
   }
 
   /** Sing one note. `midi` is the written pitch; time is AudioContext time. */
+  private wake(time: number, until: number) {
+    if (!this.running) {
+      const t = Math.max(time, this.lastStopAt + 0.005);
+      this.osc.start(t);
+      this.noise.start(t);
+      this.running = true;
+    }
+    this.activeUntil = Math.max(this.activeUntil, until);
+    VOICES.add(this);
+    if (!watchdog) {
+      watchdog = window.setInterval(() => {
+        const now = Tone.now();
+        for (const v of VOICES) v.sleepIfIdle(now);
+      }, 500);
+    }
+  }
+
+  private sleepIfIdle(now: number) {
+    if (!this.running || now < this.activeUntil + 0.4) return;
+    this.lastStopAt = now + 0.01;
+    this.osc.stop(this.lastStopAt);
+    this.noise.stop(this.lastStopAt);
+    this.running = false;
+  }
+
   sing(midi: number, durSec: number, time: number, syl: string, vel = 0.9) {
+    this.wake(time, time + Math.max(0.08, durSec) + 0.2);
     const p = this.preset;
     const t = time;
     const freq = Tone.Frequency(midi + p.octave * 12, 'midi').toFrequency();
@@ -195,6 +231,7 @@ export class AnimalVoice {
   // ---- continuous mode (microphone): keep the voice open and steer it live
   glide(freq: number, level: number, vowel: keyof typeof VOWEL = 'a') {
     const now = Tone.now();
+    this.wake(now, now + 0.6);
     const f = freq * Math.pow(2, this.preset.octave);
     this.osc.frequency.cancelScheduledValues(now);
     this.osc.frequency.linearRampToValueAtTime(f, now + 0.04);
@@ -215,6 +252,8 @@ export class AnimalVoice {
   }
 
   dispose() {
+    VOICES.delete(this);
+    this.running = false;
     [this.osc, this.vib, this.tremLfo, this.noise, this.amp, this.trem, this.output, this.breathGain, this.body, ...this.filters].forEach((n) =>
       n.dispose(),
     );

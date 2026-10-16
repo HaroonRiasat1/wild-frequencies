@@ -11,6 +11,7 @@ import { conductor } from '../conductor/conductor';
 import { BANTER, COVERS, ENCORE, getCompiled, OPENER, SETLIST } from '../songs';
 import type { Song } from '../songs/types';
 import { clearHeadliner, loadHeadliner, saveHeadliner } from '../state/headliner';
+import { party } from '../party/party';
 import { useShow } from '../state/store';
 import { CAST, WALK_ON_ORDER } from './cast';
 import { peakHype, resetPeak } from './hype';
@@ -307,6 +308,7 @@ export const director = {
 
   /** Request mode: queue a song, or play it right now. */
   request(songId: string, now: boolean) {
+    if (party.request(songId)) return; // guests ask the host
     if (songId === 'headliner' && !headlinerFile) return;
     const s = S();
     if (s.played.includes(songId) || s.songId === songId) return;
@@ -315,6 +317,7 @@ export const director = {
   },
 
   skip() {
+    if (party.isGuest) return;
     songPlayer.skip();
     trackPlayer.skip();
   },

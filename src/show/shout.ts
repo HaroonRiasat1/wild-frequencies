@@ -5,6 +5,7 @@ import { conductor } from '../conductor/conductor';
 import { COVERS, SETLIST } from '../songs';
 import { useShow } from '../state/store';
 import { catSays, director } from './director';
+import { party } from '../party/party';
 import { unlock } from './score';
 
 const COMEBACKS = [
@@ -19,17 +20,21 @@ const COMEBACKS = [
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ');
 
 /** Returns what the band replied (also says it on stage). */
-export function shout(raw: string): string {
+export function shout(raw: string, from?: string): string {
   const text = raw.trim().slice(0, 60);
   if (!text) return '';
+  if (!from && party.shout(text)) {
+    unlock('shout', 25);
+    return 'Sent to the stage! (watch the subtitles)';
+  }
   const t = norm(text);
   const s = useShow.getState();
-  s.say('YOU (from the crowd)', `"${text}"`);
-  unlock('shout', 25);
+  s.say(from ? `${from} (from the crowd)` : 'YOU (from the crowd)', `"${text}"`);
+  if (!from) unlock('shout', 25);
   let reply: string;
 
   const song = [...SETLIST, ...COVERS].find((x) =>
-    norm(x.title).split(' ').filter((w) => w.length > 3 && !['love', 'with', 'from', 'that', 'band', 'version', 'edit', 'arena', 'little', 'hall', 'had'].includes(w)).some((w) => t.includes(w)),
+    norm(x.title).split(' ').filter((w) => w.length > 3 && !['love', 'with', 'from', 'that', 'band', 'version', 'edit', 'arena', 'little', 'hall', 'had', 'gary', 'punk', 'forest', 'parade', 'mix', 'octavia', 'sloth'].includes(w)).some((w) => t.includes(w)),
   );
   if (song) {
     if (s.played.includes(song.id)) reply = `We already played "${song.title}". Were you in the bathroom?`;
