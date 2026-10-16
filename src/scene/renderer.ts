@@ -444,15 +444,32 @@ export class StageRenderer {
     // portrait: pan to whoever matters (soloist, you on stage, else the singer)
     const portrait = this.cssH > this.cssW;
     if (portrait && !(soloist && soloist.onStage)) cx = this.crowd.diveState === 'stage' ? 640 : this.cat.onStage ? this.cat.x : W / 2;
+    // promo edit: the shot list decides the framing (with a slow push-in)
+    const pc = this.promoCam;
+    if (pc) {
+      const since = (performance.now() - pc.at) / 1000;
+      zoom = pc.zoom * (1 + pc.push * since);
+      cx = pc.cx + Math.sin(f.t * 0.5) * 6;
+      cy = pc.cy + Math.sin(f.t * 0.37) * 4;
+    }
     // keep the camera inside the world (using how much of it is actually visible)
     const halfW = Math.min(W / 2, this.cssW / this.fit / 2) / zoom;
     const halfH = Math.min(H / 2, this.cssH / this.fit / 2) / zoom;
     cx = clamp(cx, halfW, W - halfW);
     cy = clamp(cy, halfH, H - halfH);
     if (zoom < 1 && !portrait) { cx = W / 2; cy = H / 2; }
-    this.cam.zoom = approach(this.cam.zoom, zoom, 1.6, f.dt);
-    this.cam.cx = approach(this.cam.cx, cx, 1.6, f.dt);
-    this.cam.cy = approach(this.cam.cy, cy, 1.6, f.dt);
+    if (this.promoSnap) {
+      // a hard cut: jump straight to the new framing
+      this.promoSnap = false;
+      this.cam.zoom = zoom;
+      this.cam.cx = cx;
+      this.cam.cy = cy;
+    } else {
+      const rate = pc ? 3.5 : 1.6;
+      this.cam.zoom = approach(this.cam.zoom, zoom, rate, f.dt);
+      this.cam.cx = approach(this.cam.cx, cx, rate, f.dt);
+      this.cam.cy = approach(this.cam.cy, cy, rate, f.dt);
+    }
     this.cam.kick = Math.max(0, this.cam.kick - f.dt * 8);
 
     this.draw(f, cue);
@@ -460,7 +477,7 @@ export class StageRenderer {
 
   private layer(p: number, f: Frame) {
     const g = this.g;
-    const k = f.reduceMotion ? 0 : this.cam.kick * 0.006 * f.intensity;
+    const k = f.reduceMotion ? 0 : this.cam.kick * (this.promoCam ? 0.022 : 0.006) * f.intensity;
     const z = (1 + (this.cam.zoom - 1) * p) * (1 + k * p);
     const cx = W / 2 + (this.cam.cx - W / 2) * p;
     const cy = H / 2 + (this.cam.cy - H / 2) * p;
@@ -522,51 +539,120 @@ export class StageRenderer {
       g.fillStyle = `rgba(3,1,12,${S.phase === 'landing' ? 0.55 : 0.25})`;
       g.fillRect(0, 0, cw, ch);
     }
+    if (this.promoFlashAt) {
+      const ft = (performance.now() - this.promoFlashAt) / 1000;
+      if (ft < 0.2) {
+        g.fillStyle = `rgba(255,250,240,${0.6 * (1 - ft / 0.2)})`;
+        g.fillRect(0, 0, cw, ch);
+      }
+    }
     if (this.promoCard) this.drawPromoCard(g, cw, ch, f);
   }
 
-  /** Promo video title cards (drawn on the canvas so the recording includes them). */
-  promoCard: { title: string; sub: string; at: number; dur: number; end?: boolean; top?: boolean } | null = null;
+  /** Promo edit: cut to a new framing (world coords), with a white flash. */
+  promoCut(cam: { cx: number; cy: number; zoom: number; push?: number }, flash = true) {
+    this.promoCam = { ...cam, push: cam.push ?? 0.025, at: performance.now() };
+    this.promoSnap = true;
+    if (flash) this.promoFlashAt = performance.now();
+  }
+
+  promoCam: { cx: number; cy: number; zoom: number; push: number; at: number } | null = null;
+  private promoSnap = false;
+  private promoFlashAt = 0;
+
+  /** Promo title cards (drawn on the canvas so the recording includes them).
+   *  Kinetic cards reveal one word per beat, each popping in. */
+  promoCard: { title: string; sub: string; at: number; dur: number; end?: boolean; top?: boolean; beat0?: number } | null = null;
 
   private drawPromoCard(g: G, cw: number, ch: number, f: Frame) {
     const c = this.promoCard!;
     const t = (performance.now() - c.at) / 1000;
-    if (t > c.dur) return;
-    const a = Math.min(1, t * 3, (c.dur - t) * 3);
-    const s = Math.min(cw / 1280, ch / 720);
+    if (t > c.dur || t < 0) return;
+    const portrait = ch > cw;
+    const a = Math.min(1, t * 6, (c.dur - t) * 5);
+    const s = portrait ? cw / 640 : Math.min(cw / 1280, ch / 720);
     g.save();
     g.globalAlpha = a;
+    const top = c.top || portrait;
     if (c.end) {
-      g.fillStyle = 'rgba(5,2,20,0.72)';
+      g.fillStyle = 'rgba(5,2,20,0.74)';
       g.fillRect(0, 0, cw, ch);
-    } else if (c.top) {
-      const grad = g.createLinearGradient(0, 0, 0, ch * 0.36);
-      grad.addColorStop(0, 'rgba(5,2,20,0.85)');
+    } else if (top) {
+      const grad = g.createLinearGradient(0, 0, 0, ch * (portrait ? 0.3 : 0.36));
+      grad.addColorStop(0, 'rgba(5,2,20,0.88)');
       grad.addColorStop(1, 'rgba(5,2,20,0)');
       g.fillStyle = grad;
-      g.fillRect(0, 0, cw, ch * 0.36);
+      g.fillRect(0, 0, cw, ch * (portrait ? 0.3 : 0.36));
     } else {
-      const grad = g.createLinearGradient(0, ch * 0.58, 0, ch);
+      const grad = g.createLinearGradient(0, ch * 0.6, 0, ch);
       grad.addColorStop(0, 'rgba(5,2,20,0)');
-      grad.addColorStop(1, 'rgba(5,2,20,0.85)');
+      grad.addColorStop(1, 'rgba(5,2,20,0.88)');
       g.fillStyle = grad;
-      g.fillRect(0, ch * 0.58, cw, ch * 0.42);
+      g.fillRect(0, ch * 0.6, cw, ch * 0.4);
     }
-    const y = c.end ? ch * 0.46 : c.top ? ch * 0.12 : ch * 0.84;
-    const slide = (1 - Math.min(1, t * 2.5)) * 30 * s;
-    g.textAlign = 'center';
+    let size = Math.round((c.end ? 84 : portrait ? 60 : 58) * s);
+    const titleFont = (px: number) => `900 ${px}px "Arial Black", "Trebuchet MS", system-ui, sans-serif`;
+    g.font = titleFont(size);
+    // shrink so the longest single word still fits the frame (portrait end card)
+    const longest = Math.max(...c.title.split(' ').map((w) => g.measureText(w).width));
+    const fitW = cw * (portrait ? 0.9 : 0.86);
+    if (longest > fitW) {
+      size = Math.floor(size * (fitW / longest));
+      g.font = titleFont(size);
+    }
     g.textBaseline = 'middle';
-    g.font = `900 ${Math.round((c.end ? 78 : 54) * s)}px "Arial Black", "Trebuchet MS", system-ui, sans-serif`;
+    g.textAlign = 'left';
+    // which words are visible (one per beat for kinetic cards)
+    const words = c.title.split(' ');
+    const beatNow = conductor.beat();
+    const shown = c.beat0 === undefined ? words.length : Math.max(1, Math.min(words.length, 1 + Math.floor(beatNow - c.beat0 + 0.05)));
+    // wrap into lines that fit
+    const space = g.measureText(' ').width;
+    const maxW = cw * (portrait ? 0.9 : 0.86);
+    const lines: { w: string; i: number; width: number }[][] = [[]];
+    let lineW = 0;
+    words.forEach((w, i) => {
+      const width = g.measureText(w).width;
+      if (lineW + width > maxW && lines[lines.length - 1].length) {
+        lines.push([]);
+        lineW = 0;
+      }
+      lines[lines.length - 1].push({ w, i, width });
+      lineW += width + space;
+    });
+    const lineH = size * 1.08;
+    const blockH = lines.length * lineH;
+    const y0 = (c.end ? ch * 0.44 : top ? ch * (portrait ? 0.1 : 0.12) : ch * 0.82) - (blockH - lineH) / 2;
     const jitter = f.reduceMotion ? 0 : Math.sin(f.t * 18) * 1.2 * s;
-    g.fillStyle = '#ff4fd8';
-    g.fillText(c.title, cw / 2 + 4 * s, y + 4 * s + slide);
-    g.fillStyle = '#00e0c6';
-    g.fillText(c.title, cw / 2 - 3 * s + jitter, y - 2 * s + slide);
-    g.fillStyle = '#ffffff';
-    g.fillText(c.title, cw / 2, y + slide);
-    g.font = `700 ${Math.round((c.end ? 30 : 24) * s)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
-    g.fillStyle = c.end ? '#ffe066' : '#f4ecff';
-    g.fillText(c.sub, cw / 2, y + (c.end ? 76 : 50) * s + slide * 0.6);
+    lines.forEach((line, li) => {
+      const total = line.reduce((acc, x) => acc + x.width, 0) + space * (line.length - 1);
+      let x = cw / 2 - total / 2;
+      const y = y0 + li * lineH;
+      for (const wd of line) {
+        if (wd.i < shown) {
+          // pop: overshoot then settle, timed from the beat this word landed on
+          const since = c.beat0 === undefined ? t * 2 : Math.max(0, beatNow - (c.beat0 + wd.i)) * (60 / conductor.state.bpm);
+          const pop = 1 + 0.2 * Math.max(0, 1 - since * 7) * Math.cos(since * 25);
+          g.save();
+          g.translate(x + wd.width / 2, y);
+          g.scale(pop, pop);
+          g.fillStyle = '#ff4fd8';
+          g.fillText(wd.w, -wd.width / 2 + 4 * s, 4 * s);
+          g.fillStyle = '#00e0c6';
+          g.fillText(wd.w, -wd.width / 2 - 3 * s + jitter, -2 * s);
+          g.fillStyle = '#ffffff';
+          g.fillText(wd.w, -wd.width / 2, 0);
+          g.restore();
+        }
+        x += wd.width + space;
+      }
+    });
+    if (c.sub && shown >= words.length) {
+      g.textAlign = 'center';
+      g.font = `700 ${Math.round((c.end ? 32 : portrait ? 28 : 25) * s)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+      g.fillStyle = c.end ? '#ffe066' : '#f4ecff';
+      g.fillText(c.sub, cw / 2, y0 + (lines.length - 1) * lineH + (c.end ? 84 : 54) * s);
+    }
     g.restore();
   }
 }
