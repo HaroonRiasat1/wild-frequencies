@@ -16,6 +16,15 @@ export function resetPeak() {
   peakHype = useShow.getState().hype;
 }
 
+// Runs on its own timer (not the render loop) so the meter keeps working when
+// the host's tab is in the background during a party.
+let lastTick = performance.now();
+window.setInterval(() => {
+  const now = performance.now();
+  tickHype(Math.min(1.2, (now - lastTick) / 1000));
+  lastTick = now;
+}, 50);
+
 export function tickHype(dt: number) {
   const s = useShow.getState();
   if (s.phase === 'landing' || party.isGuest) return; // guests get the host's hype

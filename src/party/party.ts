@@ -5,6 +5,9 @@
 //   • `song` — which song starts, and when, on the server's shared clock
 //   • `fx`   — one-off moments (confetti, pyro, LED text, speech bubbles) and,
 //              for the host's own audio track, its beats and hits
+// Two transports: the local party server (WebSocket, `npm run party`) or, when
+// the app is hosted online (e.g. Vercel), peer-to-peer WebRTC via PeerJS where
+// the host's own browser plays the server's role for its room.
 // GUESTS synthesise the band locally, starting each song at the same server
 // time (clock offset measured by ping), and send back cheers, claps, emotes,
 // shouts, song requests and pokes. The host's own track file is never sent.
@@ -53,8 +56,17 @@ export interface FriendFx {
   clap: number;
 }
 
+type Conn = import('peerjs').DataConnection;
+
 class Party {
   private ws: WebSocket | null = null;
+  private mode: 'ws' | 'p2p' = 'ws';
+  private peer: import('peerjs').Peer | null = null;
+  private hostConn: Conn | null = null;
+  /** P2P host only: connected guests (the host is the room server). */
+  private guests = new Map<string, { conn: Conn; member: Member }>();
+  private colorIdx = 1;
+  private nextGuest = 1;
   private offset = 0;
   private bestRtt = Infinity;
   private pingTimer = 0;
@@ -91,7 +103,10 @@ class Party {
   private async serverBase(): Promise<string | null> {
     const tryInfo = async (base: string) => {
       try {
-        const r = await fetch(`${location.protocol}//${base}/api/info`, { cache: 'no-store' });
+        const ctl = new AbortController();
+        const timer = window.setTimeout(() => ctl.abort(), 1500);
+        const r = await fetch(`${location.protocol}//${base}/api/info`, { cache: 'no-store', signal: ctl.signal });
+        window.clearTimeout(timer);
         if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return false;
         return !!(await r.json()).party;
       } catch {
@@ -99,8 +114,10 @@ class Party {
       }
     };
     if (await tryInfo(location.host)) return location.host;
+    // only look for a separate local server when we're on a local/LAN address
+    const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
     const dev = `${location.hostname}:5180`;
-    if (await tryInfo(dev)) return dev;
+    if (local && (await tryInfo(dev))) return dev;
     return null;
   }
 
@@ -120,10 +137,8 @@ class Party {
     this.leave(false);
     this.setParty({ role: hello.role, status: 'connecting', message: 'Finding the party server…' });
     const base = await this.serverBase();
-    if (!base) {
-      this.setParty({ status: 'error', message: 'No party server found. Start it with "npm run party" on the host computer.' });
-      return;
-    }
+    if (!base) return this.connectP2P(hello);
+    this.mode = 'ws';
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${base}`);
     this.ws = ws;
     ws.onopen = () => {
@@ -142,9 +157,14 @@ class Party {
 
   leave(announce = true) {
     const ws = this.ws;
+    const peer = this.peer;
     this.ws = null;
+    this.peer = null;
+    this.hostConn = null;
+    this.guests.clear();
     this.cleanup();
     ws?.close();
+    peer?.destroy();
     if (announce) this.setParty({ role: 'off', status: 'idle', message: '', room: null, me: null, members: [], urls: [] });
   }
 
@@ -163,7 +183,134 @@ class Party {
   }
 
   send(msg: Record<string, unknown>) {
+    if (this.mode === 'p2p') {
+      if (this.role === 'host') for (const g of this.guests.values()) this.sendTo(g.conn, msg);
+      else if (this.hostConn) this.sendTo(this.hostConn, msg);
+      return;
+    }
     if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(msg));
+  }
+
+  private sendTo(conn: Conn, msg: Record<string, unknown>) {
+    if (conn.open) conn.send(msg);
+  }
+
+  // ------------------------------------------------------------------ peer-to-peer (online hosting)
+
+  private async connectP2P(hello: { role: 'host' | 'guest'; name: string; animal: FanAnimal; room?: string }) {
+    this.mode = 'p2p';
+    this.setParty({ message: 'Opening an online room…' });
+    const { Peer } = await import('peerjs');
+    const peerId = (code: string) => `wildfreq-${code.toLowerCase()}`;
+
+    if (hello.role === 'host') {
+      const tryCode = (attempt: number) => {
+        const code = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
+        const peer = new Peer(peerId(code));
+        this.peer = peer;
+        peer.on('open', () => {
+          if (this.peer !== peer) return;
+          const me: Member = { id: 'host', name: hello.name, animal: hello.animal, color: '#ff4fd8', role: 'host' };
+          this.onMessage({ t: 'welcome', id: 'host', room: code, role: 'host', urls: [location.origin + location.pathname.replace(/\/$/, '')], roster: [me] });
+        });
+        peer.on('connection', (conn) => this.acceptGuest(conn));
+        peer.on('disconnected', () => this.peer === peer && !peer.destroyed && peer.reconnect());
+        peer.on('error', (err) => {
+          if (this.peer !== peer) return;
+          if (err.type === 'unavailable-id' && attempt < 5) {
+            peer.destroy();
+            return tryCode(attempt + 1);
+          }
+          this.setParty({ status: 'error', message: `Could not open an online room (${err.type}). Check your connection and try again.` });
+        });
+      };
+      tryCode(0);
+      return;
+    }
+
+    // guest
+    const peer = new Peer();
+    this.peer = peer;
+    peer.on('open', () => {
+      const conn = peer.connect(peerId(hello.room ?? ''), { reliable: true, serialization: 'json' });
+      this.hostConn = conn;
+      conn.on('open', () => {
+        this.sendTo(conn, { t: 'hello', ...hello });
+        this.syncClock();
+      });
+      conn.on('data', (d) => this.onMessage(d as Record<string, any>));
+      conn.on('close', () => {
+        if (this.hostConn !== conn) return;
+        this.cleanup();
+        this.setParty({ status: 'ended', message: 'The host ended the concert (or lost connection). Thanks for coming!' });
+        songPlayer.stop();
+      });
+    });
+    peer.on('error', (err) => {
+      if (this.peer !== peer) return;
+      this.setParty({
+        status: 'error',
+        message: err.type === 'peer-unavailable' ? 'No concert with that code (did the host close it?)' : `Could not reach the concert (${err.type}). Some school/office networks block this.`,
+      });
+    });
+  }
+
+  /** P2P host: the room-server logic from party/server.mjs, in the browser. */
+  private acceptGuest(conn: Conn) {
+    const id = `g${this.nextGuest++}`;
+    conn.on('data', (raw) => {
+      const m = raw as Record<string, any>;
+      if (m.t === 'ping') return this.sendTo(conn, { t: 'pong', c: m.c, s: this.serverNow() });
+      if (m.t === 'hello') {
+        if (this.guests.size >= 30) return this.sendTo(conn, { t: 'error', msg: 'This concert is full.' });
+        const COLORS = ['#ff4fd8', '#00e0c6', '#ffe066', '#ff7a1a', '#7cff4f', '#9ad5ff', '#ff2e63', '#c7a2ff'];
+        const member: Member = {
+          id,
+          name: String(m.name ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 18) || 'A Fan',
+          animal: ['raccoon', 'deer', 'hedgehog', 'bear'].includes(m.animal) ? m.animal : 'raccoon',
+          color: COLORS[this.colorIdx++ % COLORS.length],
+          role: 'guest',
+        };
+        this.guests.set(id, { conn, member });
+        const roster = this.roster();
+        this.sendTo(conn, { t: 'welcome', id, room: S().party.room, role: 'guest', urls: S().party.urls, roster });
+        this.sendTo(conn, { t: 'state', patch: this.fullPatch() });
+        if (songPlayer.current) this.sendTo(conn, { t: 'song', songId: songPlayer.current.song.id, startAt: this.serverNow() - this.songElapsedMs() });
+        this.announceRoster();
+        return;
+      }
+      if (!this.guests.has(id)) return;
+      m.from = id;
+      if (['clap', 'emote', 'poke'].includes(m.t)) {
+        for (const [gid, g] of this.guests) if (gid !== id) this.sendTo(g.conn, m);
+        this.onMessage(m);
+      } else if (['cheer', 'shout', 'request'].includes(m.t)) {
+        this.onMessage(m);
+      }
+    });
+    conn.on('close', () => {
+      if (!this.guests.delete(id)) return;
+      this.cheering.delete(id);
+      this.announceRoster();
+    });
+  }
+
+  private roster(): Member[] {
+    const host = S().party.members.find((x) => x.role === 'host');
+    return [...(host ? [host] : []), ...[...this.guests.values()].map((g) => g.member)];
+  }
+
+  private announceRoster() {
+    const roster = this.roster();
+    this.send({ t: 'roster', roster });
+    this.onMessage({ t: 'roster', roster });
+  }
+
+  private fullPatch(): Record<string, unknown> {
+    const s = S();
+    const patch: Record<string, unknown> = {};
+    for (const k of SHARED) patch[k] = s[k];
+    return patch;
   }
 
   private syncClock() {

@@ -48,8 +48,8 @@ export function PartyPanel() {
     <div>
       <h2>🎉 Party mode</h2>
       <p className="panel-sub">
-        Friends on the same Wi-Fi join your concert from their phone or laptop. The band plays on every device in sync, they show up in the crowd,
-        and their cheers fill <i>your</i> hype meter.
+        Friends anywhere join your concert from their phone or laptop — just share the link. The band plays on every device in sync, they show up
+        in the crowd, and their cheers fill <i>your</i> hype meter.
       </p>
       {p.status !== 'live' ? (
         <>
@@ -68,7 +68,8 @@ export function PartyPanel() {
           </form>
           {p.message && <p className={p.status === 'error' ? 'err' : 'fineprint'}>{p.message}</p>}
           <p className="fineprint">
-            Needs the party server running on this computer: <code>npm run party</code> (it builds the app and serves it to your network on port 5180).
+            Online (e.g. on Vercel) your browser hosts the room and friends connect to it directly. Keep this tab open while the party runs.
+            Running locally instead? <code>npm run party</code> serves it to your Wi-Fi.
           </p>
         </>
       ) : (

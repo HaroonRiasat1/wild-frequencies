@@ -24,16 +24,19 @@ working on songs).
 
 ## 🎉 Party mode — friends join your concert
 
-```bash
-npm run party      # builds, then serves the app + party relay on port 5180
-```
+**Online (e.g. the Vercel deployment) — nothing to run:**
 
-1. Open the address it prints (e.g. `http://192.168.0.12:5180`) on your
-   computer, click **Doors open**, then **🎉 Party → Start a party**.
-2. Friends on the **same Wi-Fi** scan the QR code (or open the link /
-   type the 4-letter code), pick a name and an animal, and tap **Join**.
-3. That's it. The band plays on every device, in sync; friends appear in the
-   front rows with name tags (and a shirt in their colour).
+1. Open the site, click **Doors open**, then **🎉 Party → Start a party**.
+2. Send friends the link (or let them scan the QR code / type the 4-letter
+   code). They pick a name and an animal and tap **Join** — from anywhere.
+3. Keep your tab open: your browser is the room's "server". Friends connect
+   straight to you peer-to-peer over WebRTC; the free PeerJS service is only
+   used for the initial handshake. (Very strict networks — some schools and
+   offices — can block peer-to-peer connections.)
+
+**Local network alternative:** `npm run party` builds the app and serves it
+plus a WebSocket relay on port 5180, for friends on the same Wi-Fi. The app
+uses this server automatically when it's served by it.
 
 What friends can do: **cheer** (every friend holding Cheer fills *your* hype
 meter — a loud crowd unlocks the encore), **clap**, send **emoji reactions**
@@ -42,7 +45,7 @@ meter — a loud crowd unlocks the encore), **clap**, send **emoji reactions**
 (everyone sees it). The host runs the show: setlist, skip, lights, remix,
 encore and afterparty.
 
-How it stays in sync: the party server's clock is the shared clock (each
+How it stays in sync: the host's clock (or the local server's) is the shared clock (each
 client measures its offset by ping). When the host starts a song it
 announces *"song X starts at server time T"* about 0.8 s ahead; every device
 synthesises the band itself and starts its transport at T, compensating for
@@ -52,9 +55,8 @@ songs start within ~3 ms of each other. Show state (phase, subtitles, hype,
 rain, lights, setlist…) is sent as small patches 10× a second.
 
 Your own headliner track is **never sent** to anyone — friends see the band
-follow its beats, but the sound only comes out of your speakers. Party mode
-needs everyone on the same network; nothing goes to the internet and nothing
-is stored.
+follow its beats, but the sound only comes out of your speakers. Nothing is
+stored anywhere.
 
 ## The show
 

@@ -9,7 +9,6 @@ import { isYourLine, songPlayer } from '../audio/songPlayer';
 import { trackPlayer } from '../audio/trackPlayer';
 import { conductor } from '../conductor/conductor';
 import { CAST } from '../show/cast';
-import { tickHype } from '../show/hype';
 import { party } from '../party/party';
 import { addScore, unlock } from '../show/score';
 import type { CharacterId, LightCue } from '../songs/types';
@@ -350,7 +349,6 @@ export class StageRenderer {
     const f = this.buildFrame(now);
     this.frameCache = f;
     const S = useShow.getState();
-    tickHype(f.dt);
 
     // show-phase transitions that the scene owns (roadie walk-on/off)
     if (S.phase !== this.lastPhase) {
