@@ -71,6 +71,32 @@ function fromB64(b64: string): Uint8Array {
 
 const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
 
+/** STUN finds a direct path; a TURN relay (optional, from env) rescues strict networks. */
+function iceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+  const env = import.meta.env;
+  if (env.VITE_TURN_URLS) {
+    servers.push({ urls: env.VITE_TURN_URLS.split(',').map((u) => u.trim()), username: env.VITE_TURN_USERNAME, credential: env.VITE_TURN_CREDENTIAL });
+  }
+  return servers;
+}
+
+export const EMOTES = ['🔥', '🤘', '😂', '😍', '👏', '🦆', '🌕', '🐐'];
+const CHARACTERS: CharacterId[] = ['cat', 'fox', 'sloth', 'octopus', 'owl', 'penguins', 'goat'];
+/** Per-guest rate limits: [burst, refill per second]. */
+const LIMITS: Record<string, [number, number]> = {
+  clap: [8, 6], emote: [3, 1.5], poke: [2, 0.5], shout: [2, 0.25], request: [2, 0.2], cheer: [6, 4],
+};
+
+const RESUME_KEY = 'wf-host-room';
+const RESUME_MAX_AGE = 30 * 60 * 1000;
+export interface ResumeInfo {
+  room: string;
+  name: string;
+  at: number;
+  show: Record<string, unknown>;
+}
+
 export interface FriendFx {
   emote: string | null;
   emoteT: number;
@@ -106,6 +132,18 @@ class Party {
   friendFx = new Map<string, FriendFx>();
   // guest-side clock for the host's own track
   private trackBeat = { index: 0, at: 0, period: 0.5, active: false };
+  // reliability
+  private lastHello: { role: 'host' | 'guest'; name: string; animal: FanAnimal; room?: string } | null = null;
+  private lastHeard = 0;
+  private reconnectTimer = 0;
+  private reconnectUntil = 0;
+  private heartbeat = 0;
+  private intentional = false;
+  /** Guest: we've been in this concert before, so errors mean "try again". */
+  private wasLive = false;
+  private lastSeen = new Map<string, number>();
+  private buckets = new Map<string, { tokens: number; at: number }>();
+  private saveTimer = 0;
 
   get role() {
     return S().party.role;
@@ -153,17 +191,78 @@ class Party {
     S().set({ party: { ...S().party, ...p } });
   }
 
-  async host(name: string) {
-    await this.connect({ role: 'host', name, animal: 'raccoon' });
+  /** Host a party; `room` reuses a code (after a refresh). */
+  async host(name: string, room?: string) {
+    await this.connect({ role: 'host', name, animal: 'raccoon', room });
+  }
+
+  /** A host who refreshed within the last 30 min gets their room back. */
+  resumeInfo(): ResumeInfo | null {
+    try {
+      const r = JSON.parse(sessionStorage.getItem(RESUME_KEY) ?? 'null') as ResumeInfo | null;
+      return r && Date.now() - r.at < RESUME_MAX_AGE ? r : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveResume() {
+    const s = S();
+    if (s.party.role !== 'host' || !s.party.room) return;
+    const host = s.party.members.find((m) => m.role === 'host');
+    const show = {
+      played: s.played, setLog: s.setLog, encoreUnlocked: s.encoreUnlocked, moonJoined: s.moonJoined, sunglasses: s.sunglasses,
+      score: s.score, achievements: s.achievements, acorns: s.acorns, outfit: s.outfit, hype: s.hype,
+    };
+    try {
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({ room: s.party.room, name: host?.name ?? 'The Host', at: Date.now(), show }));
+    } catch {
+      /* private mode: no resume, the party still works */
+    }
+  }
+
+  /** Token bucket per guest + message type. */
+  private allow(from: string, t: string): boolean {
+    const lim = LIMITS[t];
+    if (!lim) return true;
+    const key = `${from}:${t}`;
+    const now = performance.now() / 1000;
+    const b = this.buckets.get(key) ?? { tokens: lim[0], at: now };
+    b.tokens = Math.min(lim[0], b.tokens + (now - b.at) * lim[1]);
+    b.at = now;
+    this.buckets.set(key, b);
+    if (b.tokens < 1) return false;
+    b.tokens -= 1;
+    return true;
+  }
+
+  /** Reject malformed or spammy guest messages before anyone acts on them. */
+  private validGuestMessage(m: Record<string, any>): boolean {
+    if (!m || typeof m.t !== 'string' || typeof m.from !== 'string') return false;
+    if (!this.allow(m.from, m.t)) return false;
+    switch (m.t) {
+      case 'clap': return true;
+      case 'cheer': return typeof m.on === 'boolean';
+      case 'emote': return EMOTES.includes(m.emoji);
+      case 'poke': return CHARACTERS.includes(m.who);
+      case 'shout': return typeof m.text === 'string' && m.text.length <= 60;
+      case 'request': return typeof m.songId === 'string' && m.songId.length <= 40;
+      default: return false;
+    }
   }
 
   async join(room: string, name: string, animal: FanAnimal) {
     await this.connect({ role: 'guest', room, name, animal });
   }
 
-  private async connect(hello: { role: 'host' | 'guest'; name: string; animal: FanAnimal; room?: string }) {
-    this.leave(false);
-    this.setParty({ role: hello.role, status: 'connecting', message: 'Finding the party server…' });
+  private async connect(hello: { role: 'host' | 'guest'; name: string; animal: FanAnimal; room?: string }, reconnecting = false) {
+    if (!reconnecting) {
+      this.leave(false);
+      this.lastHello = hello;
+      this.intentional = false;
+      this.wasLive = false;
+      this.setParty({ role: hello.role, status: 'connecting', message: 'Finding the party server…' });
+    }
     const base = await this.serverBase();
     if (!base) return this.connectP2P(hello);
     this.mode = 'ws';
@@ -176,14 +275,26 @@ class Party {
     ws.onmessage = (e) => this.onMessage(JSON.parse(e.data));
     ws.onclose = () => {
       if (this.ws !== ws) return;
-      const was = S().party.status;
-      this.cleanup();
-      this.setParty({ status: was === 'error' ? 'error' : 'ended', message: was === 'error' ? S().party.message : 'Disconnected from the party.' });
+      this.ws = null;
+      this.connectionLost();
     };
     ws.onerror = () => this.setParty({ status: 'error', message: 'Could not connect to the party server.' });
   }
 
   leave(announce = true) {
+    if (announce) {
+      // tell the room this was on purpose (no reconnect attempts)
+      this.intentional = true;
+      this.send({ t: this.role === 'host' ? 'hostLeft' : 'bye' });
+      try {
+        sessionStorage.removeItem(RESUME_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+    window.clearTimeout(this.reconnectTimer);
+    this.reconnectUntil = 0;
+    if (announce) this.wasLive = false;
     const ws = this.ws;
     const peer = this.peer;
     this.ws = null;
@@ -199,6 +310,10 @@ class Party {
   private cleanup() {
     window.clearInterval(this.pingTimer);
     window.clearInterval(this.stateTimer);
+    window.clearInterval(this.heartbeat);
+    window.clearInterval(this.saveTimer);
+    this.lastSeen.clear();
+    this.buckets.clear();
     this.unsubs.forEach((u) => u());
     this.unsubs = [];
     songHooks.onPlay = null;
@@ -356,9 +471,12 @@ class Party {
     const peerId = (code: string) => `wildfreq-${code.toLowerCase()}`;
 
     if (hello.role === 'host') {
+      const wanted = hello.room?.toUpperCase();
       const tryCode = (attempt: number) => {
-        const code = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
-        const peer = new Peer(peerId(code));
+        // after a refresh, keep asking for the old code for ~30 s (the broker
+        // frees it once the old page's connection times out), then give up
+        const code = wanted && attempt < 10 ? wanted : Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
+        const peer = new Peer(peerId(code), { config: { iceServers: iceServers() } });
         this.peer = peer;
         peer.on('open', () => {
           if (this.peer !== peer) return;
@@ -369,8 +487,13 @@ class Party {
         peer.on('disconnected', () => this.peer === peer && !peer.destroyed && peer.reconnect());
         peer.on('error', (err) => {
           if (this.peer !== peer) return;
-          if (err.type === 'unavailable-id' && attempt < 5) {
+          if (err.type === 'unavailable-id' && attempt < 15) {
             peer.destroy();
+            if (wanted && attempt < 10) {
+              this.setParty({ message: `Getting your room ${wanted} back… (${attempt + 1}/10)` });
+              this.reconnectTimer = window.setTimeout(() => tryCode(attempt + 1), 3000);
+              return;
+            }
             return tryCode(attempt + 1);
           }
           this.setParty({ status: 'error', message: `Could not open an online room (${err.type}). Check your connection and try again.` });
@@ -381,25 +504,41 @@ class Party {
     }
 
     // guest
-    const peer = new Peer();
+    const peer = new Peer({ config: { iceServers: iceServers() } });
     this.peer = peer;
     peer.on('open', () => {
       const conn = peer.connect(peerId(hello.room ?? ''), { reliable: true, serialization: 'json' });
       this.hostConn = conn;
+      // a connection to a host who isn't there (yet) can hang forever: time it out
+      window.setTimeout(() => {
+        if (this.hostConn !== conn || conn.open) return;
+        this.hostConn = null;
+        conn.close();
+        if (S().party.status === 'reconnecting') this.scheduleReconnect();
+        else if (S().party.status === 'connecting') this.setParty({ status: 'error', message: 'No answer from that concert. Check the code, or ask the host if the party is still on.' });
+      }, 6000);
       conn.on('open', () => {
+        this.lastHeard = Date.now();
         this.sendTo(conn, { t: 'hello', ...hello });
         this.syncClock();
       });
-      conn.on('data', (d) => this.onMessage(d as Record<string, any>));
+      conn.on('data', (d) => {
+        this.lastHeard = Date.now();
+        this.onMessage(d as Record<string, any>);
+      });
       conn.on('close', () => {
         if (this.hostConn !== conn) return;
-        this.cleanup();
-        this.setParty({ status: 'ended', message: 'The host ended the concert (or lost connection). Thanks for coming!' });
-        songPlayer.stop();
+        this.hostConn = null;
+        this.connectionLost();
       });
     });
     peer.on('error', (err) => {
       if (this.peer !== peer) return;
+      // once we've been in the concert, any error just means: try again shortly
+      if (this.wasLive && !this.intentional) {
+        if (S().party.status !== 'reconnecting') return this.connectionLost();
+        return this.scheduleReconnect();
+      }
       this.setParty({
         status: 'error',
         message: err.type === 'peer-unavailable' ? 'No concert with that code (did the host close it?)' : `Could not reach the concert (${err.type}). Some school/office networks block this.`,
@@ -410,9 +549,13 @@ class Party {
   /** P2P host: the room-server logic from party/server.mjs, in the browser. */
   private acceptGuest(conn: Conn) {
     const id = `g${this.nextGuest++}`;
+    this.lastSeen.set(id, Date.now());
     conn.on('data', (raw) => {
       const m = raw as Record<string, any>;
+      if (!m || typeof m !== 'object') return;
+      this.lastSeen.set(id, Date.now());
       if (m.t === 'ping') return this.sendTo(conn, { t: 'pong', c: m.c, s: this.serverNow() });
+      if (m.t === 'bye') return conn.close();
       if (m.t === 'hello') {
         if (this.guests.size >= 30) return this.sendTo(conn, { t: 'error', msg: 'This concert is full.' });
         const COLORS = ['#ff4fd8', '#00e0c6', '#ffe066', '#ff7a1a', '#7cff4f', '#9ad5ff', '#ff2e63', '#c7a2ff'];
@@ -434,6 +577,7 @@ class Party {
       }
       if (!this.guests.has(id)) return;
       m.from = id;
+      if (!this.validGuestMessage(m)) return;
       if (['clap', 'emote', 'poke'].includes(m.t)) {
         for (const [gid, g] of this.guests) if (gid !== id) this.sendTo(g.conn, m);
         this.onMessage(m);
@@ -442,6 +586,7 @@ class Party {
       }
     });
     conn.on('close', () => {
+      this.lastSeen.delete(id);
       if (!this.guests.delete(id)) return;
       this.cheering.delete(id);
       this.announceRoster();
@@ -484,6 +629,7 @@ class Party {
   private onMessage(m: Record<string, any>) {
     switch (m.t) {
       case 'pong': {
+        this.lastHeard = Date.now();
         const rtt = Date.now() - m.c;
         if (rtt <= this.bestRtt * 1.5) {
           this.bestRtt = Math.min(this.bestRtt, rtt);
@@ -491,11 +637,19 @@ class Party {
         }
         return;
       }
-      case 'welcome':
+      case 'welcome': {
+        const wasReconnect = S().party.status === 'reconnecting';
+        window.clearTimeout(this.reconnectTimer);
+        this.reconnectUntil = 0;
+        this.lastHeard = Date.now();
         this.setParty({ status: 'live', room: m.room, me: m.id, members: m.roster, urls: m.urls, message: '' });
+        this.wasLive = true;
+        if (wasReconnect) stageRef.current?.concert.pop('📶 Back in the concert!', 800, 640, '#7cff4f', 24);
         if (m.role === 'host') this.startHosting();
         else this.startGuesting();
+        this.startHeartbeat();
         return;
+      }
       case 'roster': {
         const before = new Set(S().party.members.map((x: Member) => x.id));
         this.setParty({ members: m.roster });
@@ -512,6 +666,7 @@ class Party {
         this.setParty({ status: 'error', message: m.msg });
         return;
       case 'hostLeft':
+        this.intentional = true;
         this.setParty({ status: 'ended', message: 'The host ended the concert. Thanks for coming!' });
         songPlayer.stop();
         return;
@@ -528,6 +683,83 @@ class Party {
     }
     if (this.role === 'host') this.onHostMessage(m);
     else this.onGuestMessage(m);
+  }
+
+  // ------------------------------------------------------------------ reliability
+
+  /** The link dropped without a goodbye: guests keep the music going and retry. */
+  private connectionLost() {
+    if (this.intentional || S().party.status === 'idle') return;
+    if (this.role === 'guest' && this.lastHello) {
+      this.reconnectUntil = this.reconnectUntil || Date.now() + 180_000;
+      this.setParty({ status: 'reconnecting', message: 'Connection lost — reconnecting to the concert…' });
+      this.scheduleReconnect();
+      return;
+    }
+    // host lost the local server (P2P hosts reconnect to the broker on their own)
+    const was = S().party.status;
+    this.cleanup();
+    this.setParty({ status: was === 'error' ? 'error' : 'ended', message: was === 'error' ? S().party.message : 'Lost the party server.' });
+  }
+
+  private scheduleReconnect() {
+    window.clearTimeout(this.reconnectTimer);
+    if (!this.reconnectUntil || Date.now() > this.reconnectUntil) {
+      this.cleanup();
+      this.setParty({ status: 'ended', message: 'Lost the concert and could not get back in. The host may have left.' });
+      return;
+    }
+    this.reconnectTimer = window.setTimeout(() => void this.reconnect(), 2000);
+  }
+
+  private async reconnect() {
+    const hello = this.lastHello;
+    if (!hello || S().party.status !== 'reconnecting') return;
+    // tear down only the connection; keep songs/tracks playing locally
+    this.peer?.destroy();
+    this.peer = null;
+    this.hostConn = null;
+    this.ws?.close();
+    this.ws = null;
+    window.clearInterval(this.pingTimer);
+    window.clearInterval(this.heartbeat);
+    this.unsubs.forEach((u) => u()); // startGuesting subscribes again on welcome
+    this.unsubs = [];
+    this.bestRtt = Infinity;
+    await this.connect(hello, true);
+  }
+
+  private startHeartbeat() {
+    window.clearInterval(this.heartbeat);
+    this.heartbeat = window.setInterval(() => {
+      const now = Date.now();
+      if (this.role === 'guest') {
+        // pings go out every 5 s; 13 s of silence means the link is dead
+        if (now - this.lastHeard > 13_000) {
+          this.hostConn?.close();
+          this.ws?.close();
+          if (this.mode === 'p2p') {
+            this.hostConn = null;
+            this.connectionLost();
+          }
+        }
+      } else if (this.mode === 'p2p') {
+        for (const [id, seen] of this.lastSeen) {
+          if (now - seen > 16_000) this.guests.get(id)?.conn.close();
+        }
+      }
+    }, 2000);
+    if (this.role === 'host') {
+      window.clearInterval(this.saveTimer);
+      this.saveResume();
+      this.saveTimer = window.setInterval(() => this.saveResume(), 3000);
+    }
+  }
+
+  private localSongStartAt(): number {
+    const tr = Tone.getTransport();
+    if (tr.state !== 'started') return 0;
+    return this.serverNow() - tr.getSecondsAtTime(Tone.immediate()) * 1000;
   }
 
   private fx(id: string): FriendFx {
@@ -593,6 +825,8 @@ class Party {
   }
 
   private async onHostMessage(m: Record<string, any>) {
+    // (P2P already validated these on arrival; WS messages come via the server)
+    if (this.mode === 'ws' && ['cheer', 'shout', 'request'].includes(m.t) && !this.validGuestMessage(m)) return;
     const name = this.memberName(m.from);
     if (m.t === 'cheer') {
       if (m.on) this.cheering.add(m.from);
@@ -627,6 +861,7 @@ class Party {
       }
       case 'song': {
         this.stopTrackClock();
+        if (songPlayer.current?.song.id === m.songId && Math.abs(this.localSongStartAt() - m.startAt) < 60) return; // still in sync
         const compiled = getCompiled(m.songId);
         const la = Tone.getContext().lookAhead;
         const wait = (m.startAt - this.serverNow()) / 1000;

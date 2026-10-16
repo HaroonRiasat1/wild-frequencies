@@ -34,6 +34,30 @@ working on songs).
    used for the initial handshake. (Very strict networks — some schools and
    offices — can block peer-to-peer connections.)
 
+**When things go wrong (they're handled):**
+- A friend's connection drops → they see "Reconnecting…", the music keeps
+  playing, and they're back in a couple of seconds (retries for 3 minutes).
+  Dead links are noticed within ~13 s via heartbeats.
+- You (the host) refresh → open the doors again and you get the **same room
+  code** back, with the setlist, score and badges restored; friends rejoin
+  on their own.
+- Friends' messages are type-checked and rate-limited (no emoji floods).
+
+**Strict networks (TURN relay, optional):** peer-to-peer needs a direct path.
+Some school/office/mobile networks block that; a TURN relay fixes it. Get
+credentials from any TURN provider (e.g. Metered, Twilio, Cloudflare) and add
+these environment variables in Vercel (Project → Settings → Environment
+Variables), then redeploy:
+
+```
+VITE_TURN_URLS=turn:your-relay.example.com:443?transport=tcp,turns:your-relay.example.com:443
+VITE_TURN_USERNAME=…
+VITE_TURN_CREDENTIAL=…
+```
+
+They end up in the browser bundle (that's how TURN works for static sites),
+so use credentials with usage limits.
+
 **Local network alternative:** `npm run party` builds the app and serves it
 plus a WebSocket relay on port 5180, for friends on the same Wi-Fi. The app
 uses this server automatically when it's served by it.

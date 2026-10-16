@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { director } from '../show/director';
 import { useShow } from '../state/store';
 import { JoinCard, joinCode } from './PartyPanel';
+import { party } from '../party/party';
 
 export function Landing() {
   const { strobe, reduceMotion, set } = useShow();
@@ -37,6 +38,9 @@ export function Landing() {
           </div>
         </div>
 
+        {!joinCode() && party.resumeInfo() && (
+          <p className="hint">🎉 Your party <b>{party.resumeInfo()!.room}</b> will reopen when you open the doors.</p>
+        )}
         {joinCode() ? (
           <JoinCard code={joinCode()!} />
         ) : (

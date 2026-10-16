@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { engine } from '../audio/engine';
-import { party } from '../party/party';
+import { EMOTES, party } from '../party/party';
 import { useShow, type FanAnimal } from '../state/store';
 
 const ANIMALS: { id: FanAnimal; label: string }[] = [
@@ -10,7 +10,6 @@ const ANIMALS: { id: FanAnimal; label: string }[] = [
   { id: 'hedgehog', label: '🦔 Hedgehog' },
   { id: 'bear', label: '🐻 Bear' },
 ];
-const EMOTES = ['🔥', '🤘', '😂', '😍', '👏', '🦆', '🌕', '🐐'];
 
 export const joinCode = () => new URLSearchParams(location.search).get('join')?.toUpperCase().slice(0, 4) ?? null;
 
@@ -124,11 +123,12 @@ function Roster() {
 export function JoinCard({ code }: { code: string }) {
   const p = useShow((s) => s.party);
   const [name, setName] = useState(() => localStorage.getItem('wf-name') ?? '');
-  const [animal, setAnimal] = useState<FanAnimal>('raccoon');
+  const [animal, setAnimal] = useState<FanAnimal>(() => (localStorage.getItem('wf-animal') as FanAnimal) || 'raccoon');
   const [busy, setBusy] = useState(false);
   const join = async () => {
     setBusy(true);
     localStorage.setItem('wf-name', name);
+    localStorage.setItem('wf-animal', animal);
     await engine.init();
     engine.setVolume(useShow.getState().volume);
     await party.join(code, name || 'A Fan', animal);

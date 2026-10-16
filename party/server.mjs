@@ -64,11 +64,28 @@ const toAll = (room, msg, except) => {
 const code = () => Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
 
+// per-connection rate limits for things the server relays to everyone
+const LIMITS = { clap: [8, 6], emote: [3, 1.5], poke: [2, 0.5] };
+const EMOTES = ['🔥', '🤘', '😂', '😍', '👏', '🦆', '🌕', '🐐'];
+
 let nextId = 1;
 wss.on('connection', (ws) => {
   const id = `p${nextId++}`;
   let room = null;
   let role = null;
+  const buckets = new Map();
+  const allow = (t) => {
+    const lim = LIMITS[t];
+    if (!lim) return true;
+    const now = Date.now() / 1000;
+    const b = buckets.get(t) ?? { tokens: lim[0], at: now };
+    b.tokens = Math.min(lim[0], b.tokens + (now - b.at) * lim[1]);
+    b.at = now;
+    buckets.set(t, b);
+    if (b.tokens < 1) return false;
+    b.tokens -= 1;
+    return true;
+  };
 
   ws.on('message', (raw) => {
     let m;
@@ -83,7 +100,9 @@ wss.on('connection', (ws) => {
       const name = clean(m.name, 18) || (m.role === 'host' ? 'The Host' : 'A Fan');
       const animal = ['raccoon', 'deer', 'hedgehog', 'bear'].includes(m.animal) ? m.animal : 'raccoon';
       if (m.role === 'host') {
-        let c = code();
+        // a host who refreshed asks for their old code back
+        const wanted = clean(m.room, 4).toUpperCase();
+        let c = /^[A-Z]{4}$/.test(wanted) && !rooms.has(wanted) ? wanted : code();
         while (rooms.has(c)) c = code();
         room = { host: ws, clients: new Map(), members: new Map(), lastState: null, lastSong: null, colorIdx: 0 };
         rooms.set(c, room);
@@ -120,7 +139,10 @@ wss.on('connection', (ws) => {
       } else toAll(room, m, id);
     } else {
       // guest → host (cheer, shout, request) and, for visible stuff, everyone
-      if (['clap', 'emote', 'poke'].includes(m.t)) toAll(room, m, id);
+      if (['clap', 'emote', 'poke'].includes(m.t)) {
+        if (!allow(m.t) || (m.t === 'emote' && !EMOTES.includes(m.emoji))) return;
+        toAll(room, m, id);
+      }
       else if (['cheer', 'shout', 'request'].includes(m.t)) send(room.host, m);
     }
   });

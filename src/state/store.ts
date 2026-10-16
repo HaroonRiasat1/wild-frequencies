@@ -28,7 +28,7 @@ export interface Member {
 }
 export interface PartyState {
   role: 'off' | 'host' | 'guest';
-  status: 'idle' | 'connecting' | 'live' | 'error' | 'ended';
+  status: 'idle' | 'connecting' | 'live' | 'reconnecting' | 'error' | 'ended';
   message: string;
   room: string | null;
   me: string | null;

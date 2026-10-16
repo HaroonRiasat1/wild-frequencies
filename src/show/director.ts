@@ -271,6 +271,15 @@ export const director = {
     await engine.init();
     headlinerFile = headlinerFile ?? (await loadHeadliner());
     engine.setVolume(S().volume);
+    // a host who refreshed mid-party: restore the show and reopen the same room
+    const resume = party.resumeInfo();
+    if (resume && !new URLSearchParams(location.search).get('join')) {
+      S().set(resume.show as never);
+      S().say('Stage Manager (a badger)', `Welcome back! Reopening your party ${resume.room} — your friends will reconnect.`);
+      runShow(true);
+      void party.host(resume.name, resume.room);
+      return;
+    }
     // ?rehearsal skips the mic check + walk-on (handy when adding songs)
     runShow(new URLSearchParams(location.search).has('rehearsal'));
   },
