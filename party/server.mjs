@@ -55,7 +55,7 @@ const server = createServer((req, res) => {
   createReadStream(file).pipe(res);
 });
 
-const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
+const wss = new WebSocketServer({ server, maxPayload: 256 * 1024 });
 const send = (ws, msg) => ws.readyState === 1 && ws.send(JSON.stringify(msg));
 const roster = (room) => [...room.members.values()];
 const toAll = (room, msg, except) => {
@@ -113,7 +113,11 @@ wss.on('connection', (ws) => {
       if (m.t === 'state') room.lastState = { ...m, full: true, ...(room.lastState ? { patch: { ...room.lastState.patch, ...m.patch } } : {}) };
       if (m.t === 'song') room.lastSong = m;
       if (m.t === 'stop') room.lastSong = null;
-      toAll(room, m, id);
+      // `to`: a message for one guest (e.g. sending a newcomer the host's track)
+      if (m.to) {
+        const target = room.clients.get(m.to);
+        if (target) send(target, m);
+      } else toAll(room, m, id);
     } else {
       // guest → host (cheer, shout, request) and, for visible stuff, everyone
       if (['clap', 'emote', 'poke'].includes(m.t)) toAll(room, m, id);

@@ -96,6 +96,9 @@ export function PartyPanel() {
             </div>
           </div>
           <Roster />
+          <p className="fineprint">
+            🎵 Tracks you upload (💿 Your track) are sent to everyone here so they hear them in sync. Only share music you're allowed to share.
+          </p>
           <button className="big-btn alt" onClick={() => party.leave()}>End the party</button>
         </>
       )}

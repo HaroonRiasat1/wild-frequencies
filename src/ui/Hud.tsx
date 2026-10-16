@@ -35,6 +35,7 @@ export function Hud() {
           ) : (
             <span className="meta">{s.analysing ? '🎛️ Soundchecking your track (finding every beat)…' : phaseLabel(s.phase, s.uploadName)}</span>
           )}
+          {s.party.trackMsg && <span className="section-chip">{s.party.trackMsg}</span>}
           <button className="score-chip" onClick={() => s.togglePanel('score')} title="Score & badges">
             ⭐ {s.score.toLocaleString()} · 🌰 {s.acorns}
           </button>

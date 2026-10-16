@@ -14,7 +14,8 @@
 
 import * as Tone from 'tone';
 import { songHooks, songPlayer } from '../audio/songPlayer';
-import { trackPlayer } from '../audio/trackPlayer';
+import type { TrackMap } from '../audio/trackAnalysis';
+import { trackHooks, trackPlayer } from '../audio/trackPlayer';
 import { conductor, type ConductorEvents } from '../conductor/conductor';
 import { stageRef } from '../scene/stageRef';
 import { getCompiled } from '../songs';
@@ -50,6 +51,26 @@ function stepAt(song: ReturnType<typeof getCompiled>, seconds: number): { exact:
   return { exact: song.totalSteps - 1, s16: 60 / bpm / 4 };
 }
 
+// WebRTC data channels silently drop messages over ~16 KB, so: 11 KB of audio
+// per chunk = ~15 KB of base64 + JSON
+const CHUNK = 11 * 1024;
+const MAX_TRACK_BYTES = 40 * 1024 * 1024;
+
+function toB64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+function fromB64(b64: string): Uint8Array {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
+
 export interface FriendFx {
   emote: string | null;
   emoteT: number;
@@ -67,6 +88,13 @@ class Party {
   private guests = new Map<string, { conn: Conn; member: Member }>();
   private colorIdx = 1;
   private nextGuest = 1;
+  // host: the track friends should have, and whether it's playing
+  private track: { file: File; key: string; name: string } | null = null;
+  private nowPlaying: { key: string; name: string; startAt: number } | null = null;
+  // guest: tracks received from the host
+  private incoming = new Map<string, { name: string; mime: string; parts: string[]; got: number; n: number }>();
+  private ready = new Map<string, { buffer: AudioBuffer; map: TrackMap; name: string }>();
+  private hostPlaying: { key: string; name: string; startAt: number } | null = null;
   private offset = 0;
   private bestRtt = Infinity;
   private pingTimer = 0;
@@ -176,6 +204,12 @@ class Party {
     songHooks.onPlay = null;
     songHooks.onStop = null;
     songHooks.leadIn = 0.1;
+    trackHooks.onPlay = null;
+    trackHooks.onStop = null;
+    trackHooks.leadIn = 0.1;
+    this.nowPlaying = null;
+    this.hostPlaying = null;
+    this.incoming.clear();
     this.cheering.clear();
     this.friendFx.clear();
     this.lastSent = {};
@@ -193,6 +227,124 @@ class Party {
 
   private sendTo(conn: Conn, msg: Record<string, unknown>) {
     if (conn.open) conn.send(msg);
+  }
+
+  /** Host → one guest. */
+  private sendToMember(id: string, msg: Record<string, unknown>) {
+    if (this.mode === 'p2p') {
+      const g = this.guests.get(id);
+      if (g) this.sendTo(g.conn, msg);
+    } else this.send({ ...msg, to: id });
+  }
+
+  private buffered(id: string | null): number {
+    if (this.mode === 'p2p') {
+      if (id) return this.guests.get(id)?.conn.dataChannel?.bufferedAmount ?? 0;
+      return Math.max(0, ...[...this.guests.values()].map((g) => g.conn.dataChannel?.bufferedAmount ?? 0));
+    }
+    return this.ws?.bufferedAmount ?? 0;
+  }
+
+  // ------------------------------------------------------------------ sharing the host's own track
+
+  /** Host: make this track available to everyone in the room (downloads start now). */
+  offerTrack(file: File, name: string) {
+    const key = fileKey(file);
+    if (this.track?.key === key) return;
+    this.track = { file, key, name };
+    if (this.isHost) void this.sendFile(null);
+  }
+
+  /** Host: this track is about to play (sends it first if friends don't have it). */
+  hostTrack(file: File, name: string) {
+    this.offerTrack(file, name);
+  }
+
+  private async sendFile(to: string | null) {
+    const t = this.track;
+    if (!t) return;
+    if (t.file.size > MAX_TRACK_BYTES) {
+      stageRef.current?.concert.pop('Track too big to share (max 40 MB) — friends see the band but won\'t hear it', 800, 660, '#ff7a9a', 18);
+      return;
+    }
+    const bytes = new Uint8Array(await t.file.arrayBuffer());
+    const n = Math.ceil(bytes.length / CHUNK);
+    const out = (msg: Record<string, unknown>) => (to ? this.sendToMember(to, msg) : this.send(msg));
+    out({ t: 'trackBegin', key: t.key, name: t.name, mime: t.file.type || 'audio/mpeg', n });
+    for (let i = 0; i < n; i++) {
+      if (this.track !== t || S().party.status !== 'live') return;
+      // backpressure: don't flood the connection
+      while (this.buffered(to) > 2 * 1024 * 1024) await new Promise((r) => setTimeout(r, 40));
+      out({ t: 'trackChunk', key: t.key, i, d: toB64(bytes.subarray(i * CHUNK, (i + 1) * CHUNK)) });
+      if (i % 24 === 23) await new Promise((r) => setTimeout(r, 0));
+    }
+    out({ t: 'trackEnd', key: t.key });
+    if (this.nowPlaying && this.nowPlaying.key === t.key) out({ t: 'trackPlay', ...this.nowPlaying });
+  }
+
+  /** Host: a newcomer gets the current track (and where we are in it). */
+  private catchUpGuest(id: string) {
+    if (!this.track) return;
+    void this.sendFile(id);
+  }
+
+  // guest side
+  private onTrackMessage(m: Record<string, any>) {
+    if (m.t === 'trackBegin') {
+      if (this.ready.has(m.key)) return;
+      this.incoming.set(m.key, { name: m.name, mime: m.mime, parts: new Array(m.n), got: 0, n: m.n });
+      this.setParty({ trackMsg: `⬇️ Getting the host's track "${m.name}"… 0%` });
+    } else if (m.t === 'trackChunk') {
+      const inc = this.incoming.get(m.key);
+      if (!inc || inc.parts[m.i]) return;
+      inc.parts[m.i] = m.d;
+      inc.got++;
+      const pct = Math.floor((inc.got / inc.n) * 100);
+      if (pct % 5 === 0) this.setParty({ trackMsg: `⬇️ Getting the host's track "${inc.name}"… ${pct}%` });
+    } else if (m.t === 'trackEnd') {
+      const inc = this.incoming.get(m.key);
+      if (!inc || inc.got < inc.n) return;
+      this.incoming.delete(m.key);
+      void this.finishTrack(m.key, inc);
+    } else if (m.t === 'trackPlay') {
+      this.hostPlaying = { key: m.key, name: m.name, startAt: m.startAt };
+      this.startLocalTrack();
+    } else if (m.t === 'trackStop') {
+      this.hostPlaying = null;
+      if (trackPlayer.active) trackPlayer.stop();
+    }
+  }
+
+  private async finishTrack(key: string, inc: { name: string; mime: string; parts: string[] }) {
+    this.setParty({ trackMsg: `🎛️ Soundchecking "${inc.name}"…` });
+    try {
+      const blobParts = inc.parts.map((p) => fromB64(p));
+      const file = new File(blobParts as BlobPart[], inc.name, { type: inc.mime });
+      const { prepareTrack } = await import('../show/director');
+      const { buffer, map } = await prepareTrack(file);
+      this.ready.set(key, { buffer, map, name: inc.name });
+      this.setParty({ trackMsg: '' });
+      this.startLocalTrack();
+    } catch (e) {
+      console.error(e);
+      this.setParty({ trackMsg: '⚠️ Could not play the host\'s track on this device' });
+    }
+  }
+
+  /** Guest: play the host's track locally, in sync (jumping in if we're late). */
+  private startLocalTrack() {
+    const hp = this.hostPlaying;
+    if (!hp) return;
+    const r = this.ready.get(hp.key);
+    if (!r || (trackPlayer.active && trackPlayer.map === r.map)) return;
+    this.stopTrackClock();
+    const la = Tone.getContext().lookAhead;
+    const wait = (hp.startAt - this.serverNow()) / 1000;
+    if (wait - la > 0.03) trackPlayer.play(r.buffer, r.map, hp.name, () => {}, { startIn: wait - la });
+    else {
+      const lead = 0.25;
+      trackPlayer.play(r.buffer, r.map, hp.name, () => {}, { startIn: lead, offset: -wait + la + lead });
+    }
   }
 
   // ------------------------------------------------------------------ peer-to-peer (online hosting)
@@ -277,6 +429,7 @@ class Party {
         this.sendTo(conn, { t: 'state', patch: this.fullPatch() });
         if (songPlayer.current) this.sendTo(conn, { t: 'song', songId: songPlayer.current.song.id, startAt: this.serverNow() - this.songElapsedMs() });
         this.announceRoster();
+        this.catchUpGuest(id);
         return;
       }
       if (!this.guests.has(id)) return;
@@ -347,7 +500,10 @@ class Party {
         const before = new Set(S().party.members.map((x: Member) => x.id));
         this.setParty({ members: m.roster });
         for (const mem of m.roster as Member[]) {
-          if (!before.has(mem.id) && mem.id !== S().party.me) stageRef.current?.concert.pop(`${mem.name} joined the crowd! 🎉`, 800, 640, mem.color, 22);
+          if (!before.has(mem.id) && mem.id !== S().party.me) {
+            stageRef.current?.concert.pop(`${mem.name} joined the crowd! 🎉`, 800, 640, mem.color, 22);
+            if (this.role === 'host' && this.mode === 'ws') this.catchUpGuest(mem.id);
+          }
         }
         for (const id of [...this.cheering]) if (!m.roster.some((x: Member) => x.id === id)) this.cheering.delete(id);
         return;
@@ -388,6 +544,17 @@ class Party {
     songHooks.onPlay = (songId, startIn) =>
       this.send({ t: 'song', songId, startAt: this.serverNow() + (startIn + Tone.getContext().lookAhead) * 1000 });
     songHooks.onStop = () => this.send({ t: 'stop' });
+    trackHooks.leadIn = 0.8;
+    trackHooks.onPlay = (startIn) => {
+      if (!this.track) return;
+      this.nowPlaying = { key: this.track.key, name: this.track.name, startAt: this.serverNow() + (startIn + Tone.getContext().lookAhead) * 1000 };
+      this.send({ t: 'trackPlay', ...this.nowPlaying });
+    };
+    trackHooks.onStop = () => {
+      this.nowPlaying = null;
+      this.send({ t: 'trackStop' });
+    };
+    if (this.track) void this.sendFile(null);
     this.stateTimer = window.setInterval(() => this.broadcastState(), 100);
     for (const e of FX_EVENTS) {
       this.unsubs.push(conductor.on(e, (p) => this.send({ t: 'fx', e, p })));
@@ -450,6 +617,7 @@ class Party {
   }
 
   private onGuestMessage(m: Record<string, any>) {
+    if (typeof m.t === 'string' && m.t.startsWith('track')) return this.onTrackMessage(m);
     switch (m.t) {
       case 'state': {
         const patch = m.patch as Partial<Record<SharedKey, unknown>>;
@@ -485,6 +653,7 @@ class Party {
 
   /** Host is playing their own file: follow its beats (no audio here). */
   private onTrackFx(e: string, p: unknown) {
+    if (trackPlayer.active) return; // we have the real track — our own analysis drives the band
     const tb = this.trackBeat;
     if (!tb.active) {
       tb.active = true;

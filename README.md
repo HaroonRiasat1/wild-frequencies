@@ -54,8 +54,15 @@ right 16th note (even across tempo changes). Measured on one machine:
 songs start within ~3 ms of each other. Show state (phase, subtitles, hype,
 rain, lights, setlist…) is sent as small patches 10× a second.
 
-Your own headliner track is **never sent** to anyone — friends see the band
-follow its beats, but the sound only comes out of your speakers. Nothing is
+**Your own tracks play for friends too.** When you play or headline a track
+(💿 Your track), it's sent to everyone in the room in small chunks (WebRTC data
+channels drop messages over ~16 KB). Each friend's device runs the same
+soundcheck (beats, sections, vocals, key) and plays it on the shared clock,
+jumping in at the right spot if it arrived late; while it's still
+downloading, the band follows your beats. A 3.4 MB track was playing on the
+guest within ~4.5 s, 3 ms from the host. Up to 40 MB per track. Only share
+music you're allowed to share — friends receive a copy of the file.
+Nothing is
 stored anywhere.
 
 ## The show

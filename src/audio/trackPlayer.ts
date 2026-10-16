@@ -11,6 +11,13 @@ import { engine } from './engine';
 import { songPlayer } from './songPlayer';
 import type { TrackMap } from './trackAnalysis';
 
+/** Party hooks: the host announces when its track starts; guests join at an offset. */
+export const trackHooks = {
+  leadIn: 0.1,
+  onPlay: null as ((startIn: number) => void) | null,
+  onStop: null as (() => void) | null,
+};
+
 class TrackPlayer {
   map: TrackMap | null = null;
   private player: Tone.Player | null = null;
@@ -24,7 +31,7 @@ class TrackPlayer {
     return !!this.map;
   }
 
-  play(buffer: AudioBuffer, map: TrackMap, name: string, onEnd: () => void) {
+  play(buffer: AudioBuffer, map: TrackMap, name: string, onEnd: () => void, opts: { startIn?: number; offset?: number } = {}) {
     this.stop();
     songPlayer.stop();
     const tr = Tone.getTransport();
@@ -116,7 +123,12 @@ class TrackPlayer {
     conductor.state.beatSource = () => this.beatAt(tr.getSecondsAtTime(Tone.immediate()));
     conductor.state.quantize = () => this.nextGrid();
     Tone.getDraw().schedule(() => conductor.emit('songStart', { song: pseudo }), Tone.now());
-    tr.start('+0.1');
+    // a synced Player started at transport 0 plays from `offset` when the
+    // transport starts there — that's how late-joining friends jump in
+    const startIn = opts.startIn ?? trackHooks.leadIn;
+    const offset = Math.max(0, Math.min(map.duration - 0.5, opts.offset ?? 0));
+    tr.start(Tone.now() + Math.max(0.02, startIn), offset);
+    if (!opts.offset) trackHooks.onPlay?.(startIn);
   }
 
   /** Fractional beat number at track time t (downbeats land on multiples of 4). */
@@ -186,6 +198,7 @@ class TrackPlayer {
 
   stop() {
     if (!this.map && !this.player) return;
+    trackHooks.onStop?.();
     const tr = Tone.getTransport();
     tr.stop();
     tr.cancel(0);

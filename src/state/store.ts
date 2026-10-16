@@ -34,6 +34,8 @@ export interface PartyState {
   me: string | null;
   members: Member[];
   urls: string[];
+  /** Guest: progress of downloading the host's track. */
+  trackMsg?: string;
 }
 
 export type Movement = 'still' | 'sweep' | 'chase' | 'pulse' | 'strobe';

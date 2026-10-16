@@ -57,7 +57,7 @@ const analysed = new Map<string, { buffer: AudioBuffer; map: TrackMap }>();
 const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
 
 /** Decode + analyse once (beats, onsets, sections); cached for replays. */
-async function prepareTrack(file: File): Promise<{ buffer: AudioBuffer; map: TrackMap }> {
+export async function prepareTrack(file: File): Promise<{ buffer: AudioBuffer; map: TrackMap }> {
   const hit = analysed.get(fileKey(file));
   if (hit) return hit;
   S().set({ analysing: true });
@@ -73,7 +73,7 @@ async function prepareTrack(file: File): Promise<{ buffer: AudioBuffer; map: Tra
   }
 }
 
-const trackTitle = (f: File) => f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s*\([^)]*\)\s*$/, '').trim();
+export const trackTitle = (f: File) => f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s*\([^)]*\)\s*$/, '').trim();
 
 function playTrack(file: File, id: number, phase: 'playing' | 'upload'): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -85,6 +85,7 @@ function playTrack(file: File, id: number, phase: 'playing' | 'upload'): Promise
         conductor.emit('ledText', { text: title.toUpperCase(), seconds: 4 });
         catSays('This one is a cover. We will mouth along with total conviction.');
         resetPeak();
+        party.hostTrack(file, title);
         trackPlayer.play(buffer, map, title, () => {
           if (id !== runId) return reject(ABORT);
           const st = S();
@@ -289,6 +290,7 @@ export const director = {
   /** Make a track tonight's headliner (stored in this browser only). Opens the set. */
   async setHeadliner(file: File) {
     headlinerFile = file;
+    party.offerTrack(file, trackTitle(file)); // friends start downloading it now
     S().set({ headliner: { name: trackTitle(file) } });
     try {
       await saveHeadliner(file);
