@@ -100,13 +100,13 @@ function playTrack(file: File, id: number, phase: 'playing' | 'upload'): Promise
   });
 }
 
-/** What plays next: a request, else your headliner (it opens the set), else the running order. */
+/** What plays next: a request, else the famous opener, then your headliner, then the running order. */
 function peekNext(): Song | 'headliner' | null {
   const s = S();
   if (s.requested === 'headliner' && headlinerFile && !s.played.includes('headliner')) return 'headliner';
   const req = s.requested && !s.played.includes(s.requested) ? [...SETLIST, ...COVERS].find((x) => x.id === s.requested) : null;
   if (req) return req;
-  if (headlinerFile && !s.played.includes('headliner')) return 'headliner';
+  if (headlinerFile && !s.played.includes('headliner') && s.played.includes(SETLIST[0].id)) return 'headliner';
   return SETLIST.find((x) => !s.played.includes(x.id)) ?? null;
 }
 

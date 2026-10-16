@@ -1,5 +1,6 @@
 import { compileSong, type CompiledSong } from './compile';
-import { COVERS } from './covers';
+import { COVERS as CLASSIC_COVERS } from './covers';
+import { entertainer, happyBirthday, jingleBells, saints } from './famous';
 import { eightArms } from './eightArms';
 import { fogMachineHeart } from './fogMachineHeart';
 import { hibernation } from './hibernation';
@@ -11,12 +12,13 @@ import type { Song } from './types';
 import { velvetClaws } from './velvetClaws';
 
 /** The main set, in default running order. Add your own song here. */
-export const SETLIST: Song[] = [moonlitStatic, velvetClaws, eightArms, fogMachineHeart, hibernation, howlAtTheDisco];
+/** The set opens with a famous one: the band marches in. */
+export const SETLIST: Song[] = [saints, moonlitStatic, velvetClaws, eightArms, fogMachineHeart, hibernation, howlAtTheDisco];
 export const ENCORE: Song = lastCall;
 /** The opening act's one (1) song. */
 export const OPENER: Song = squeakEasy;
 /** Famous (public-domain) songs, played on request. */
-export { COVERS };
+export const COVERS: Song[] = [...CLASSIC_COVERS, entertainer, jingleBells, happyBirthday];
 export const ALL_SONGS: Song[] = [...SETLIST, ENCORE, OPENER, ...COVERS];
 
 const cache = new Map<string, CompiledSong>();
@@ -69,6 +71,13 @@ export const BANTER: Record<string, string[]> = {
     'Thank you! We did not write that one. We did, however, play it.',
     'Gary would like it noted that he knew every note. He did not.',
   ],
+  saints: [
+    'Thank you! That was a song about us. Everything is about us.',
+    'Kevin, please stop marching. The song is over.',
+  ],
+  entertainer: ['Professor Hootenanny, everybody. He learned that from a pianola.', 'Gary is still playing the left hand. Let him finish.'],
+  'jingle-bells': ['Yes, it is October. No, we will not be taking questions.'],
+  'happy-birthday': ['Happy birthday, Gary.', 'Gary: …thank… you… (it was in March)'],
   'old-macdonald': ['Greg would like to thank his agent, Old MacDonald.', 'E-I-E-I-thank you.'],
   'ode-to-joy': ['That was Beethoven. He could not hear it. Lucky him.', '(that is a joke, we love Ludwig)'],
   'mountain-king': ['Somebody get Octavia a glass of water.', 'And a new drum kit. And a nap.'],

@@ -53,7 +53,7 @@ export function Setlist() {
             <span className="sl-num">★</span>
             <span className="sl-title">
               {headliner.name}
-              <small>tonight's headliner (your track) · opens the set</small>
+              <small>tonight's headliner (your track) · plays right after the opener</small>
             </span>
             <span className="sl-act">
               {songId === 'headliner' ? '♪ now' : played.includes('headliner') ? '✓' : requested === 'headliner' ? '★ next' : canRequest ? (
@@ -242,7 +242,7 @@ export function UploadPanel() {
       )}
       {headliner && (
         <p className="fineprint">
-          Headliner: <b>{headliner.name}</b> — opens the set.{' '}
+          Headliner: <b>{headliner.name}</b> — plays right after the opener.{' '}
           <button className="linkish" onClick={() => void director.removeHeadliner()}>remove</button>
         </p>
       )}

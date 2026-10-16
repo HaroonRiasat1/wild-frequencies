@@ -28,10 +28,11 @@ working on songs).
 1. **Opening act** – The Crumbs (two very nervous mice) play their one song. Someone heckles. Polite applause.
 2. **Mic check** – Trash Panda Pete (roadie raccoon): "one two, one two… *squeak*" (plus a little feedback).
 3. **Walk-on** – band members enter one by one with name cards. The diva enters last.
-4. **The set** – six original songs with banter in between:
+4. **The set** – a famous opener plus six original songs with banter in between:
 
    | # | Song | BPM | Key | Showcase |
    |---|------|-----|-----|----------|
+   | 0 | When the Saints Go Marching In (traditional) | 108 | C major | the famous opener: the band marches in; Greg gets verse 3 |
    | 1 | Moonlit Static | 96 | A minor | slow build, drums kick in at the drop |
    | 2 | Velvet Claws | 108 | E dorian | sloth bass groove, fox knee-slide solo |
    | 3 | Eight Arms of Love | 124 | D minor | octopus drum solo (inking likely) |
@@ -51,9 +52,14 @@ working on songs).
 | Ode to Joy | Beethoven, 1824 | a disco edit with new (silly) English lyrics |
 | In the Hall of the Mountain King | Grieg, 1875 | instrumental accelerando, 96 → 186 BPM, Octavia drum solo |
 | Twinkle Twinkle Little Star | traditional (1806 poem) | an arena power-ballad with lighters |
+| The Entertainer | Scott Joplin, 1902 | a ragtime piano feature for the owl, stride bass by Gary |
+| Jingle Bells | Pierpont, 1857 | it is October; they do not care |
+| Happy Birthday to You | Hill sisters, 1893 | a 168 BPM punk version for Gary (and Kevin, and Greg) |
 
-These are all public domain. Modern famous songs are copyrighted, so they are
-not bundled — to have the band play along to one you own, use **Your track →
+These are all public domain worldwide. Songs from 1930 (e.g. "I Got Rhythm",
+"Georgia on My Mind") entered the **US** public domain in 2026 but are still
+protected in many other countries, so they are not included. Modern famous
+songs are copyrighted, so they are not bundled — to have the band play along to one you own, use **Your track →
 Make it tonight's headliner** (the file stays in your browser).
 
 All other melodies, lyrics and progressions are original. Every song runs 1:40–2:05.
