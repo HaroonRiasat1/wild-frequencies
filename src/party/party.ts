@@ -72,7 +72,7 @@ function fromB64(b64: string): Uint8Array {
 const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
 
 /** STUN finds a direct path; a TURN relay (optional, from env) rescues strict networks. */
-function iceServers(): RTCIceServer[] {
+export function iceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
   const env = import.meta.env;
   if (env.VITE_TURN_URLS) {
