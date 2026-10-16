@@ -522,5 +522,51 @@ export class StageRenderer {
       g.fillStyle = `rgba(3,1,12,${S.phase === 'landing' ? 0.55 : 0.25})`;
       g.fillRect(0, 0, cw, ch);
     }
+    if (this.promoCard) this.drawPromoCard(g, cw, ch, f);
+  }
+
+  /** Promo video title cards (drawn on the canvas so the recording includes them). */
+  promoCard: { title: string; sub: string; at: number; dur: number; end?: boolean; top?: boolean } | null = null;
+
+  private drawPromoCard(g: G, cw: number, ch: number, f: Frame) {
+    const c = this.promoCard!;
+    const t = (performance.now() - c.at) / 1000;
+    if (t > c.dur) return;
+    const a = Math.min(1, t * 3, (c.dur - t) * 3);
+    const s = Math.min(cw / 1280, ch / 720);
+    g.save();
+    g.globalAlpha = a;
+    if (c.end) {
+      g.fillStyle = 'rgba(5,2,20,0.72)';
+      g.fillRect(0, 0, cw, ch);
+    } else if (c.top) {
+      const grad = g.createLinearGradient(0, 0, 0, ch * 0.36);
+      grad.addColorStop(0, 'rgba(5,2,20,0.85)');
+      grad.addColorStop(1, 'rgba(5,2,20,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, cw, ch * 0.36);
+    } else {
+      const grad = g.createLinearGradient(0, ch * 0.58, 0, ch);
+      grad.addColorStop(0, 'rgba(5,2,20,0)');
+      grad.addColorStop(1, 'rgba(5,2,20,0.85)');
+      g.fillStyle = grad;
+      g.fillRect(0, ch * 0.58, cw, ch * 0.42);
+    }
+    const y = c.end ? ch * 0.46 : c.top ? ch * 0.12 : ch * 0.84;
+    const slide = (1 - Math.min(1, t * 2.5)) * 30 * s;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = `900 ${Math.round((c.end ? 78 : 54) * s)}px "Arial Black", "Trebuchet MS", system-ui, sans-serif`;
+    const jitter = f.reduceMotion ? 0 : Math.sin(f.t * 18) * 1.2 * s;
+    g.fillStyle = '#ff4fd8';
+    g.fillText(c.title, cw / 2 + 4 * s, y + 4 * s + slide);
+    g.fillStyle = '#00e0c6';
+    g.fillText(c.title, cw / 2 - 3 * s + jitter, y - 2 * s + slide);
+    g.fillStyle = '#ffffff';
+    g.fillText(c.title, cw / 2, y + slide);
+    g.font = `700 ${Math.round((c.end ? 30 : 24) * s)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    g.fillStyle = c.end ? '#ffe066' : '#f4ecff';
+    g.fillText(c.sub, cw / 2, y + (c.end ? 76 : 50) * s + slide * 0.6);
+    g.restore();
   }
 }

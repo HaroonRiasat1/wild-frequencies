@@ -269,6 +269,11 @@ async function runShow(skipIntro: boolean) {
 export const director = {
   async doorsOpen() {
     await engine.init();
+    // ?promo: the scripted highlight reel instead of the show
+    if (new URLSearchParams(location.search).has('promo')) {
+      const { runPromo } = await import('../promo/promo');
+      return void runPromo();
+    }
     headlinerFile = headlinerFile ?? (await loadHeadliner());
     engine.setVolume(S().volume);
     // a host who refreshed mid-party: restore the show and reopen the same room

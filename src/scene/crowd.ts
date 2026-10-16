@@ -94,10 +94,10 @@ export class Crowd {
   }
 
   /** Crowd surfer of the day: usually the frog, sometimes something much heavier. */
-  surf() {
+  surf(kind?: SurferKind) {
     if (this.surfer) return;
     const r = Math.random();
-    this.surfer = { x: -80, t: 0, kind: r < 0.55 ? 'frog' : r < 0.8 ? 'hedgehog' : 'bear' };
+    this.surfer = { x: -80, t: 0, kind: kind ?? (r < 0.55 ? 'frog' : r < 0.8 ? 'hedgehog' : 'bear') };
   }
 
   cheer() {

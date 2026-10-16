@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "party": "npm run build && node party/server.mjs",
-    "party:serve": "node party/server.mjs"
+    "party:serve": "node party/server.mjs",
+    "promo": "node scripts/record-promo.mjs"
   },
   "dependencies": {
     "framer-motion": "^14.2.0",
@@ -29,6 +30,7 @@
     "@types/react-dom": "^18.3.7",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.7.0",
+    "puppeteer-core": "^25.14.0",
     "typescript": "^5.9.3",
     "vite": "^5.4.21"
   }
