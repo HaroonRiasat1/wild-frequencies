@@ -19,6 +19,8 @@ export interface TrackSection {
   intensity: number;
   soloist: CharacterId | null;
   hype: boolean;
+  /** Sung, big sections (choruses) — where backing vocals almost always are. */
+  backing: boolean;
   led: LedMode;
   lights: LightCue;
 }
@@ -363,8 +365,11 @@ function buildSections(beats: number[], downbeat: number, energy: Float32Array, 
   ph.forEach((p, i) => {
     const kind = kinds[i];
     const prevOut = out[out.length - 1];
+    // backing singers come out for sung choruses (and drops that are sung)
+    const backing = p.V > 0.08 && (kind === 'chorus' || (kind === 'drop' && p.V >= vMed * 0.85));
     if (prevOut && prevOut.kind === kind) {
       prevOut.end = p.t1;
+      prevOut.backing ||= backing;
       return;
     }
     const look = LOOKS[kind];
@@ -377,6 +382,7 @@ function buildSections(beats: number[], downbeat: number, energy: Float32Array, 
       intensity: 0.2 + r * 0.8,
       soloist: kind === 'solo' ? 'fox' : kind === 'bridge' ? 'owl' : null,
       hype: kind === 'drop' || kind === 'chorus' || kind === 'solo',
+      backing,
       led: look.led,
       lights: look.lights,
     });

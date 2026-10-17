@@ -16,6 +16,7 @@ import { CHARACTER_TO_INSTRUMENT, isAudible, useShow } from '../state/store';
 import { approach, clamp, type G } from './draw';
 import type { Character, Frame } from './characters/base';
 import { Cat } from './characters/cat';
+import { FLAMINGO_POKES, Flamingos } from './characters/flamingos';
 import { Fox } from './characters/fox';
 import { Goat } from './characters/goat';
 import { Octopus } from './characters/octopus';
@@ -55,8 +56,11 @@ export class StageRenderer {
   readonly owl = new Owl();
   readonly penguins = new Penguins();
   readonly goat = new Goat();
+  /** Session backing singers — on stage only while a section has backing vocals. */
+  readonly flamingos = new Flamingos();
+  private backingHold = 0;
   readonly band: Record<CharacterId, Character>;
-  private drawOrder: Character[];
+  private drawOrder: Character<string>[];
   private hitOrder: Character[];
   private roadie = new Roadie();
   private sky: Sky;
@@ -91,7 +95,7 @@ export class StageRenderer {
       this.concert.pop('STAGE DIVE COMPLETE 🤸', 800, 660, '#ffe066', 28);
     };
     this.band = { cat: this.cat, fox: this.fox, sloth: this.sloth, octopus: this.octopus, owl: this.owl, penguins: this.penguins, goat: this.goat };
-    this.drawOrder = [this.octopus, this.owl, this.penguins, this.fox, this.sloth, this.cat];
+    this.drawOrder = [this.octopus, this.owl, this.flamingos, this.penguins, this.fox, this.sloth, this.cat];
     this.hitOrder = [this.goat, this.cat, this.sloth, this.fox, this.penguins, this.owl, this.octopus];
     this.octopus.emitInk = (x, y, n) => this.particles.ink(x, y, n);
     this.octopus.emitStick = (x, y) => this.particles.stick(x, y);
@@ -130,7 +134,10 @@ export class StageRenderer {
       conductor.on('line', ({ line }) => {
         S().set({ lyric: line ? { words: line.words, animal: line.animal, active: -1, id: line.id, yours: isYourLine(line.id) } : null });
       }),
-      conductor.on('backing', ({ syl, durSec }) => this.penguins.sing(syl, durSec)),
+      conductor.on('backing', ({ syl, durSec }) => {
+        this.penguins.sing(syl, durSec);
+        if (syl === 'ooh') this.flamingos.sing(syl, durSec);
+      }),
       conductor.on('hype', ({ source }) => {
         if (source !== 'click') this.goat.scream();
       }),
@@ -230,6 +237,10 @@ export class StageRenderer {
       }
     }
     const [wx, wy] = this.toLayer(clientX, clientY, 1);
+    if (this.flamingos.hitTest(wx, wy)) {
+      this.flamingos.poke(FLAMINGO_POKES[Math.floor(Math.random() * FLAMINGO_POKES.length)]);
+      return;
+    }
     for (const c of this.hitOrder) {
       if (c.hitTest(wx, wy)) {
         this.poke(c.id);
@@ -410,6 +421,12 @@ export class StageRenderer {
       c.setOnStage(S.onStage[c.id]);
       c.update(f, !isAudible(CHARACTER_TO_INSTRUMENT[c.id]));
     }
+    // backing singers: strut on for sections with backing vocals, off a moment after
+    const wantBacking = f.playing && S.onStage.cat && conductor.state.section?.section.backing === 'ooh';
+    this.backingHold = wantBacking ? 2.5 : Math.max(0, this.backingHold - f.dt);
+    this.flamingos.setOnStage(this.backingHold > 0);
+    this.flamingos.mouthAlong(trackPlayer.active || party.followingTrack ? conductor.state.vocal : 0);
+    this.flamingos.update(f, !isAudible('backing'));
     const ov = S.lightOverride;
     const cue: LightCue | null = ov
       ? { palette: ov.palette, movement: ov.movement === 'strobe' && !S.strobe ? 'chase' : ov.movement, lasers: ov.lasers, fog: this.fog.density }

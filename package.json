@@ -13,6 +13,7 @@
     "promo": "node scripts/record-promo.mjs"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "framer-motion": "^14.2.0",
     "peerjs": "^1.5.5",
     "pitchy": "^4.1.0",

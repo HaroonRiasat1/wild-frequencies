@@ -26,8 +26,8 @@ export interface Frame {
 
 export type Anim = 'offstage' | 'walk' | 'idle' | 'play' | 'solo' | 'celebrate' | 'react' | 'frozen' | 'bow';
 
-export abstract class Character {
-  abstract readonly id: CharacterId;
+export abstract class Character<Id extends string = CharacterId> {
+  abstract readonly id: Id;
   x: number;
   y: number;
   scale: number;

@@ -48,7 +48,7 @@ class TrackPlayer {
     };
     this.pseudo = pseudo;
     this.sections = map.sections.map((s, index) => {
-      const section: Section = { kind: s.kind, bars: 0, label: s.label, lights: s.lights, led: s.led, intensity: s.intensity, soloist: s.soloist ?? undefined };
+      const section: Section = { kind: s.kind, bars: 0, label: s.label, lights: s.lights, led: s.led, intensity: s.intensity, soloist: s.soloist ?? undefined, backing: s.backing ? 'ooh' : null };
       return { index, start: 0, end: 0, section, soloist: s.soloist };
     });
 
