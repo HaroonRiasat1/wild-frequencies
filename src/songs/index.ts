@@ -1,6 +1,7 @@
 import { compileSong, type CompiledSong } from './compile';
 import { COVERS as CLASSIC_COVERS } from './covers';
 import { entertainer, happyBirthday, jingleBells, saints } from './famous';
+import { MORE_COVERS } from './famousMore';
 import { eightArms } from './eightArms';
 import { fogMachineHeart } from './fogMachineHeart';
 import { hibernation } from './hibernation';
@@ -18,7 +19,7 @@ export const ENCORE: Song = lastCall;
 /** The opening act's one (1) song. */
 export const OPENER: Song = squeakEasy;
 /** Famous (public-domain) songs, played on request. */
-export const COVERS: Song[] = [...CLASSIC_COVERS, entertainer, jingleBells, happyBirthday];
+export const COVERS: Song[] = [...CLASSIC_COVERS, entertainer, jingleBells, happyBirthday, ...MORE_COVERS];
 export const ALL_SONGS: Song[] = [...SETLIST, ENCORE, OPENER, ...COVERS];
 
 const cache = new Map<string, CompiledSong>();
@@ -82,6 +83,12 @@ export const BANTER: Record<string, string[]> = {
   'ode-to-joy': ['That was Beethoven. He could not hear it. Lucky him.', '(that is a joke, we love Ludwig)'],
   'mountain-king': ['Somebody get Octavia a glass of water.', 'And a new drum kit. And a nap.'],
   twinkle: ['That one was for the moon.', 'The moon says thank you. The moon is crying again.'],
+  'can-can': ['Kevin, you can stop kicking now.', 'Kevin cannot stop kicking. Somebody hold Kevin.'],
+  'william-tell': ['Octavia, everybody! That was eight horses and zero horses.', 'Please do not gallop to the exits.'],
+  'fur-elise': ['That was for Elise. Wherever she is.', 'The owl says he knows her. The owl is lying.'],
+  'oh-susanna': ['Susanna has stopped crying. Greg is crying now.', 'Rusty would like you to know that WAS a banjo.'],
+  'frere-jacques': ['Gary is awake! Give it up for Gary!', '…he is asleep again.'],
+  'la-cucaracha': ['¡Gracias! Greg would like to return the shoes.', 'He cannot. He ate them.'],
   goodnight: [
     'Thank you, goodnight!!',
     '(we are definitely not hiding behind the amps)',
